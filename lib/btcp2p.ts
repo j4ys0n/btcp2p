@@ -1,10 +1,11 @@
 import * as net from 'net';
-
 import * as crypto from 'crypto';
 import * as cryptoBinary from 'crypto-binary';
 
+// class imports
 import { Utils } from './util/general.util';
 
+// interface imports
 import { PeerAddress } from './interfaces/peer.interface';
 import {
   ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
@@ -64,7 +65,7 @@ const createNonce = () => {
 
 }
 
-export class BtcPeerWorker {
+export class BTCP2P {
   public client: net.Socket | any;
   private util = new Utils();
   // bitcoin specific vars

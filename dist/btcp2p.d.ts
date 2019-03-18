@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import * as net from 'net';
 declare type Handler<E> = (event: E) => void;
-export declare class BtcPeerWorker {
+export declare class BTCP2P {
     private options;
     client: net.Socket | any;
     private util;

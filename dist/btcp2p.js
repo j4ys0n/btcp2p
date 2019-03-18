@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var net = require("net");
 var crypto = require("crypto");
 var cryptoBinary = require("crypto-binary");
+// class imports
 var general_util_1 = require("./util/general.util");
 //general consts
 var MINUTE = 60 * 1000;
@@ -52,8 +53,8 @@ var readFlowingBytes = function (stream, amount, preRead, callback) {
 // TODO create nonce for sending with ping
 var createNonce = function () {
 };
-var BtcPeerWorker = /** @class */ (function () {
-    function BtcPeerWorker(options) {
+var BTCP2P = /** @class */ (function () {
+    function BTCP2P(options) {
         var _this = this;
         this.options = options;
         this.util = new general_util_1.Utils();
@@ -160,62 +161,62 @@ var BtcPeerWorker = /** @class */ (function () {
         });
         this.client = this.connect();
     }
-    BtcPeerWorker.prototype.onConnect = function (handler) {
+    BTCP2P.prototype.onConnect = function (handler) {
         this.connectDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireConnect = function (event) {
+    BTCP2P.prototype.fireConnect = function (event) {
         this.connectDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onDisconnect = function (handler) {
+    BTCP2P.prototype.onDisconnect = function (handler) {
         this.disconnectDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireDisconnect = function (event) {
+    BTCP2P.prototype.fireDisconnect = function (event) {
         this.disconnectDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onConnectionRejected = function (handler) {
+    BTCP2P.prototype.onConnectionRejected = function (handler) {
         this.connectionRejectedDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireConnectionRejected = function (event) {
+    BTCP2P.prototype.fireConnectionRejected = function (event) {
         this.connectionRejectedDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onError = function (handler) {
+    BTCP2P.prototype.onError = function (handler) {
         this.errorDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireError = function (event) {
+    BTCP2P.prototype.fireError = function (event) {
         this.errorDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onSentMessage = function (handler) {
+    BTCP2P.prototype.onSentMessage = function (handler) {
         this.sentMessageDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireSentMessage = function (event) {
+    BTCP2P.prototype.fireSentMessage = function (event) {
         this.sentMessageDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onBlockNotify = function (handler) {
+    BTCP2P.prototype.onBlockNotify = function (handler) {
         this.blockNotifyDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireBlockNotify = function (event) {
+    BTCP2P.prototype.fireBlockNotify = function (event) {
         this.blockNotifyDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onTxNotify = function (handler) {
+    BTCP2P.prototype.onTxNotify = function (handler) {
         this.txNotifyDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireTxNotify = function (event) {
+    BTCP2P.prototype.fireTxNotify = function (event) {
         this.txNotifyDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onPeerMessage = function (handler) {
+    BTCP2P.prototype.onPeerMessage = function (handler) {
         this.peerMessageDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.firePeerMessage = function (event) {
+    BTCP2P.prototype.firePeerMessage = function (event) {
         this.peerMessageDispatcher.fire(event);
     };
-    BtcPeerWorker.prototype.onVersion = function (handler) {
+    BTCP2P.prototype.onVersion = function (handler) {
         this.versionDispatcher.register(handler);
     };
-    BtcPeerWorker.prototype.fireVersion = function (event) {
+    BTCP2P.prototype.fireVersion = function (event) {
         this.versionDispatcher.fire(event);
     };
     // event handlers
-    BtcPeerWorker.prototype.on = function (event, handler) {
+    BTCP2P.prototype.on = function (event, handler) {
         switch (event) {
             case 'connect':
                 this.onConnect(handler);
@@ -246,7 +247,7 @@ var BtcPeerWorker = /** @class */ (function () {
                 break;
         }
     };
-    BtcPeerWorker.prototype.connect = function () {
+    BTCP2P.prototype.connect = function () {
         var _this = this;
         var client = net.connect({
             host: this.options.host,
@@ -280,7 +281,7 @@ var BtcPeerWorker = /** @class */ (function () {
         this.setupMessageParser(this.client);
         return client;
     };
-    BtcPeerWorker.prototype.sendVersion = function () {
+    BTCP2P.prototype.sendVersion = function () {
         var payload = Buffer.concat([
             this.util.packUInt32LE(this.options.protocolVersion),
             this.networkServices,
@@ -295,7 +296,7 @@ var BtcPeerWorker = /** @class */ (function () {
         this.sendMessage(this.commands.version, payload);
         this.fireSentMessage({ command: 'version' });
     };
-    BtcPeerWorker.prototype.setupMessageParser = function (client) {
+    BTCP2P.prototype.setupMessageParser = function (client) {
         var _this = this;
         var beginReadingMessage = function (preRead) {
             readFlowingBytes(client, 24, preRead, function (header, lopped) {
@@ -345,7 +346,7 @@ var BtcPeerWorker = /** @class */ (function () {
         };
         // beginReadingMessage(null); // TODO do we need this?
     };
-    BtcPeerWorker.prototype.handleInv = function (payload) {
+    BTCP2P.prototype.handleInv = function (payload) {
         var count = payload.readUInt8(0);
         payload = payload.slice(1);
         if (count >= 0xfd) {
@@ -386,7 +387,7 @@ var BtcPeerWorker = /** @class */ (function () {
             payload = payload.slice(36);
         }
     };
-    BtcPeerWorker.prototype.handleVersion = function (payload) {
+    BTCP2P.prototype.handleVersion = function (payload) {
         var s = new MessageParser(payload);
         var parsed = {
             version: s.readUInt32LE(0),
@@ -404,10 +405,10 @@ var BtcPeerWorker = /** @class */ (function () {
         }
         this.fireVersion(parsed);
     };
-    BtcPeerWorker.prototype.handleReject = function (payload) {
+    BTCP2P.prototype.handleReject = function (payload) {
         console.log(payload);
     };
-    BtcPeerWorker.prototype.getHost = function (buff) {
+    BTCP2P.prototype.getHost = function (buff) {
         if (buff.slice(0, 12).toString('hex') === IPV6_IPV4_PADDING.toString('hex')) {
             //IPv4
             return { host: buff.slice(12).join('.'), version: 4 };
@@ -423,7 +424,7 @@ var BtcPeerWorker = /** @class */ (function () {
                 version: 6 };
         }
     };
-    BtcPeerWorker.prototype.getAddr = function (buff) {
+    BTCP2P.prototype.getAddr = function (buff) {
         var addr = {
             hostRaw: Buffer.from([]),
             host: '',
@@ -452,11 +453,11 @@ var BtcPeerWorker = /** @class */ (function () {
         }
         return addr;
     };
-    BtcPeerWorker.prototype.handleAddr = function (payload) {
+    BTCP2P.prototype.handleAddr = function (payload) {
         var addrs = this.parseAddrMessage(payload);
         this.firePeerMessage({ command: 'addr', payload: { host: this.options.host, port: this.options.port, addresses: addrs } });
     };
-    BtcPeerWorker.prototype.parseAddrMessage = function (payload) {
+    BTCP2P.prototype.parseAddrMessage = function (payload) {
         var s = new MessageParser(payload);
         var addrs = [];
         var addrNum = s.readVarInt();
@@ -465,18 +466,18 @@ var BtcPeerWorker = /** @class */ (function () {
         }
         return addrs;
     };
-    BtcPeerWorker.prototype.startPings = function () {
+    BTCP2P.prototype.startPings = function () {
         var _this = this;
         setInterval(function () {
             _this.sendPing();
         }, PING_INTERVAL);
     };
-    BtcPeerWorker.prototype.sendPing = function () {
+    BTCP2P.prototype.sendPing = function () {
         var payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
         this.sendMessage(this.commands.ping, payload);
         this.fireSentMessage({ command: 'ping' });
     };
-    BtcPeerWorker.prototype.handlePing = function (payload) {
+    BTCP2P.prototype.handlePing = function (payload) {
         var nonce = null;
         var sendBack = null;
         if (payload.length) {
@@ -497,14 +498,14 @@ var BtcPeerWorker = /** @class */ (function () {
         this.sendMessage(this.commands.pong, sendBack);
         this.fireSentMessage({ command: 'pong', payload: { message: 'nonce: ' + nonce } });
     };
-    BtcPeerWorker.prototype.sendHeadersBack = function (payload) {
+    BTCP2P.prototype.sendHeadersBack = function (payload) {
         this.sendMessage(this.commands.headers, payload);
         this.fireSentMessage({ command: 'headers', payload: {} });
     };
-    BtcPeerWorker.prototype.handleHeaders = function (payload) {
+    BTCP2P.prototype.handleHeaders = function (payload) {
         this.headers = payload;
     };
-    BtcPeerWorker.prototype.handleHeaderRequest = function (payload) {
+    BTCP2P.prototype.handleHeaderRequest = function (payload) {
         if (this.headers === undefined) {
             this.waitingForHeaders = true;
             this.sendMessage(this.commands.getheaders, payload);
@@ -514,7 +515,7 @@ var BtcPeerWorker = /** @class */ (function () {
             this.sendHeadersBack(this.headers);
         }
     };
-    BtcPeerWorker.prototype.handleMessage = function (command, payload) {
+    BTCP2P.prototype.handleMessage = function (command, payload) {
         this.firePeerMessage({ command: command });
         // console.log(payload);
         switch (command) {
@@ -559,7 +560,7 @@ var BtcPeerWorker = /** @class */ (function () {
                 break;
         }
     };
-    BtcPeerWorker.prototype.sendMessage = function (command, payload) {
+    BTCP2P.prototype.sendMessage = function (command, payload) {
         var message = Buffer.concat([
             this.magic,
             command,
@@ -569,6 +570,6 @@ var BtcPeerWorker = /** @class */ (function () {
         ]);
         this.client.write(message);
     };
-    return BtcPeerWorker;
+    return BTCP2P;
 }());
-exports.BtcPeerWorker = BtcPeerWorker;
+exports.BTCP2P = BTCP2P;
