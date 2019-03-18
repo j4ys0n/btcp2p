@@ -127,78 +127,78 @@ export class BtcPeerWorker {
   // events
   // connect
   private connectDispatcher = new EventDispatcher<ConnectEvent>();
-  private onConnect(handler: Handler<ConnectEvent>) {
+  private onConnect(handler: Handler<ConnectEvent>): void {
     this.connectDispatcher.register(handler);
   }
-  private fireConnect(event: ConnectEvent) {
+  private fireConnect(event: ConnectEvent): void {
     this.connectDispatcher.fire(event);
   }
   // disconnect
   private disconnectDispatcher = new EventDispatcher<DisconnectEvent>();
-  private onDisconnect(handler: Handler<DisconnectEvent>) {
+  private onDisconnect(handler: Handler<DisconnectEvent>): void {
     this.disconnectDispatcher.register(handler);
   }
-  private fireDisconnect(event: DisconnectEvent) {
+  private fireDisconnect(event: DisconnectEvent): void {
     this.disconnectDispatcher.fire(event);
   }
   // connection rejected
   private connectionRejectedDispatcher = new EventDispatcher<ConnectionRejectedEvent>();
-  private onConnectionRejected(handler: Handler<ConnectionRejectedEvent>) {
+  private onConnectionRejected(handler: Handler<ConnectionRejectedEvent>): void {
     this.connectionRejectedDispatcher.register(handler);
   }
-  private fireConnectionRejected(event: ConnectionRejectedEvent) {
+  private fireConnectionRejected(event: ConnectionRejectedEvent): void {
     this.connectionRejectedDispatcher.fire(event);
   }
   // error
   private errorDispatcher = new EventDispatcher<ErrorEvent>();
-  private onError(handler: Handler<ErrorEvent>) {
+  private onError(handler: Handler<ErrorEvent>): void {
     this.errorDispatcher.register(handler);
   }
-  private fireError(event: ErrorEvent) {
+  private fireError(event: ErrorEvent): void {
     this.errorDispatcher.fire(event);
   }
   // message
   private sentMessageDispatcher = new EventDispatcher<SentMessageEvent>();
-  private onSentMessage(handler: Handler<SentMessageEvent>) {
+  private onSentMessage(handler: Handler<SentMessageEvent>): void {
     this.sentMessageDispatcher.register(handler);
   }
-  private fireSentMessage(event: SentMessageEvent) {
+  private fireSentMessage(event: SentMessageEvent): void {
     this.sentMessageDispatcher.fire(event);
   }
   // block notify
   private blockNotifyDispatcher = new EventDispatcher<BlockNotifyEvent>();
-  private onBlockNotify(handler: Handler<BlockNotifyEvent>) {
+  private onBlockNotify(handler: Handler<BlockNotifyEvent>): void {
     this.blockNotifyDispatcher.register(handler);
   }
-  private fireBlockNotify(event: BlockNotifyEvent) {
+  private fireBlockNotify(event: BlockNotifyEvent): void {
     this.blockNotifyDispatcher.fire(event);
   }
   // tx notify
   private txNotifyDispatcher = new EventDispatcher<TxNotifyEvent>();
-  private onTxNotify(handler: Handler<TxNotifyEvent>) {
+  private onTxNotify(handler: Handler<TxNotifyEvent>): void {
     this.txNotifyDispatcher.register(handler);
   }
-  private fireTxNotify(event: TxNotifyEvent) {
+  private fireTxNotify(event: TxNotifyEvent): void {
     this.txNotifyDispatcher.fire(event);
   }
   // peer message
   private peerMessageDispatcher = new EventDispatcher<PeerMessageEvent>();
-  private onPeerMessage(handler: Handler<PeerMessageEvent>) {
+  private onPeerMessage(handler: Handler<PeerMessageEvent>): void {
     this.peerMessageDispatcher.register(handler);
   }
-  private firePeerMessage(event: PeerMessageEvent) {
+  private firePeerMessage(event: PeerMessageEvent): void {
     this.peerMessageDispatcher.fire(event);
   }
   // version message
   private versionDispatcher = new EventDispatcher<VersionEvent>();
-  private onVersion(handler: Handler<VersionEvent>) {
+  private onVersion(handler: Handler<VersionEvent>): void {
     this.versionDispatcher.register(handler);
   }
-  private fireVersion(event: VersionEvent) {
+  private fireVersion(event: VersionEvent): void {
     this.versionDispatcher.fire(event);
   }
   // event handlers
-  public on(event: string, handler: Handler<any>) {
+  public on(event: string, handler: Handler<any>): void {
     switch(event) {
       case 'connect':
         this.onConnect(handler);
@@ -300,7 +300,7 @@ export class BtcPeerWorker {
     return client;
   }
 
-  private sendVersion() {
+  private sendVersion(): void {
     const payload = Buffer.concat([
       this.util.packUInt32LE(this.options.protocolVersion),
       this.networkServices,
@@ -316,7 +316,7 @@ export class BtcPeerWorker {
     this.fireSentMessage({command: 'version'});
   }
 
-  private setupMessageParser(client: net.Socket) {
+  private setupMessageParser(client: net.Socket): void {
     const beginReadingMessage = (preRead: Buffer) => {
       readFlowingBytes(client, 24, preRead, (header: Buffer, lopped: Buffer) => {
         let msgMagic;
@@ -364,7 +364,7 @@ export class BtcPeerWorker {
     // beginReadingMessage(null); // TODO do we need this?
   }
 
-  private handleInv(payload: Buffer) {
+  private handleInv(payload: Buffer): void {
     let count = payload.readUInt8(0);
     payload = payload.slice(1);
     if (count >= 0xfd) {
@@ -406,7 +406,7 @@ export class BtcPeerWorker {
     }
   }
 
-  private handleVersion(payload: Buffer) {
+  private handleVersion(payload: Buffer): void {
     const s = new MessageParser(payload);
     let parsed = {
       version: s.readUInt32LE(0),
@@ -425,11 +425,11 @@ export class BtcPeerWorker {
     this.fireVersion(parsed);
   }
 
-  private handleReject(payload: Buffer) {
+  private handleReject(payload: Buffer): void {
     console.log(payload);
   }
 
-  private getHost(buff: Buffer) {
+  private getHost(buff: Buffer): {host: string; version: number} {
     if (buff.slice(0,12).toString('hex') === IPV6_IPV4_PADDING.toString('hex')) {
       //IPv4
       return { host: buff.slice(12).join('.'), version: 4 };
@@ -445,7 +445,7 @@ export class BtcPeerWorker {
     }
   }
 
-  private getAddr(buff: Buffer) {
+  private getAddr(buff: Buffer): PeerAddress {
     let addr: PeerAddress = {
       hostRaw: Buffer.from([]),
       host: '',
@@ -474,12 +474,12 @@ export class BtcPeerWorker {
     return addr;
   }
 
-  private handleAddr(payload: Buffer) {
+  private handleAddr(payload: Buffer): void {
     const addrs = this.parseAddrMessage(payload);
     this.firePeerMessage({command: 'addr', payload: {host: this.options.host, port: this.options.port, addresses: addrs}});
   }
 
-  private parseAddrMessage(payload: Buffer) {
+  private parseAddrMessage(payload: Buffer): PeerAddress[] {
     const s = new MessageParser(payload);
     let addrs = [];
     let addrNum = s.readVarInt();
@@ -489,19 +489,19 @@ export class BtcPeerWorker {
     return addrs;
   }
 
-  private startPings() {
+  private startPings(): void {
     setInterval(() => {
       this.sendPing();
     }, PING_INTERVAL);
   }
 
-  private sendPing() {
+  private sendPing(): void {
     const payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
     this.sendMessage(this.commands.ping, payload);
     this.fireSentMessage({command: 'ping'});
   }
 
-  private handlePing(payload: Buffer) {
+  private handlePing(payload: Buffer): void {
     let nonce = null;
     let sendBack = null;
     if (payload.length) {
@@ -522,16 +522,16 @@ export class BtcPeerWorker {
     this.fireSentMessage({command: 'pong', payload: {message: 'nonce: ' + nonce}});
   }
 
-  private sendHeadersBack(payload: Buffer) {
+  private sendHeadersBack(payload: Buffer): void {
     this.sendMessage(this.commands.headers, payload);
     this.fireSentMessage({command: 'headers', payload: {}});
   }
 
-  private handleHeaders(payload: Buffer) {
+  private handleHeaders(payload: Buffer): void {
     this.headers = payload;
   }
 
-  private handleHeaderRequest(payload: Buffer) {
+  private handleHeaderRequest(payload: Buffer): void {
     if (this.headers === undefined) {
       this.waitingForHeaders = true;
       this.sendMessage(this.commands.getheaders, payload);
@@ -541,7 +541,7 @@ export class BtcPeerWorker {
     }
   }
 
-  private handleMessage(command: string, payload: Buffer) {
+  private handleMessage(command: string, payload: Buffer): void {
     this.firePeerMessage({command: command});
     // console.log(payload);
     switch (command) {
@@ -586,7 +586,7 @@ export class BtcPeerWorker {
     }
   }
 
-  public sendMessage(command: Buffer, payload: Buffer) {
+  public sendMessage(command: Buffer, payload: Buffer): void {
     const message = Buffer.concat([
       this.magic,
       command,
