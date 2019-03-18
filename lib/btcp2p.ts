@@ -72,7 +72,7 @@ export class BtcPeerWorker {
   private magicInt: number = 0;
   private networkServices = Buffer.from('0100000000000000', 'hex'); //NODE_NETWORK services (value 1 packed as uint64)
   private emptyNetAddress = Buffer.from('010000000000000000000000000000000000ffff000000000000', 'hex');
-  private userAgent: Buffer = this.util.varStringBuffer('/peer-module/');
+  private userAgent: Buffer = this.util.varStringBuffer('/btcp2p/');
   private blockStartHeight = Buffer.from('00000000', 'hex'); //block start_height, can be empty
   //If protocol version is new enough, add do not relay transactions flag byte, outlined in BIP37
   //https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
