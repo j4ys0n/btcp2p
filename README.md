@@ -59,4 +59,15 @@ addListeners(peer: BTCP2P) {
     console.log(m);
   });
 }
+
+const peer = new BTCP2P({
+  name: 'litecoin',
+	peerMagic: 'fbc0b6db',
+	disableTransactions: true,
+	host: '1.2.3.4',
+	port: 9333,
+	protocolVersion: 70015,
+	persist: true,
+});
+addWorkerListeners(peer);
 ```
