@@ -1,0 +1,31 @@
+{
+  "name": "btcp2p",
+  "version": "1.0.0",
+  "description": "light btc-based p2p client",
+  "main": "dist/btcp2p.js",
+  "typings": "dist/btcp2p.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tslint -c tslint.json",
+    "lintfix": "tslint -c tslint.json --fix",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digital-assets-data/btcp2p.git"
+  },
+  "author": "Jayson Jacobs",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/digital-assets-data/btcp2p/issues"
+  },
+  "homepage": "https://github.com/digital-assets-data/btcp2p#readme",
+  "dependencies": {
+    "@types/node": "^11.11.3",
+    "crypto-binary": "^0.1.1"
+  },
+  "devDependencies": {
+    "tslint": "^5.14.0",
+    "typescript": "^3.3.3333"
+  }
+}
