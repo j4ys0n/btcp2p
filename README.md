@@ -8,7 +8,7 @@ A light client that can connect to and interact with any crypto p2p network base
 ```
 import { BTCP2P } from 'btcp2p';
 
-addListeners(peer: BTCP2P) {
+const addListeners = (peer: BTCP2P) => {
   peer.on('connect', (e) => {
     const msg = 'connected to: '  + this.options.host;
     console.log(msg);
