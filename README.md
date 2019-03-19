@@ -67,7 +67,7 @@ const peer = new BTCP2P({
   host: '1.2.3.4',
   port: 9333,
   protocolVersion: 70015,
-  persist: true,
+  persist: true
 });
-addWorkerListeners(peer);
+addListeners(peer);
 ```
