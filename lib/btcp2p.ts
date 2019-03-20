@@ -13,7 +13,12 @@ import {
   TxNotifyEvent, ErrorEvent, VersionEvent
 } from './interfaces/events.interface';
 
-//general consts
+// testing flag
+const ENV = process.env.NODE_ENV;
+const ENVS = {
+  test: 'test'
+}
+// general consts
 const MINUTE = 60 * 1000;
 const CONNECTION_RETRY = 5 * MINUTE;
 const PING_INTERVAL = 5 * MINUTE;
@@ -66,15 +71,15 @@ const createNonce = () => {
 }
 
 export class BTCP2P {
-  public client: net.Socket | any;
-  private util = new Utils();
+  public client!: net.Socket;
+  private util: Utils = new Utils();
   // bitcoin specific vars
   private magic: Buffer;
   private magicInt: number = 0;
-  private networkServices = Buffer.from('0100000000000000', 'hex'); //NODE_NETWORK services (value 1 packed as uint64)
-  private emptyNetAddress = Buffer.from('010000000000000000000000000000000000ffff000000000000', 'hex');
+  private networkServices: Buffer = Buffer.from('0100000000000000', 'hex'); //NODE_NETWORK services (value 1 packed as uint64)
+  private emptyNetAddress: Buffer = Buffer.from('010000000000000000000000000000000000ffff000000000000', 'hex');
   private userAgent: Buffer = this.util.varStringBuffer('/btcp2p/');
-  private blockStartHeight = Buffer.from('00000000', 'hex'); //block start_height, can be empty
+  private blockStartHeight: Buffer = Buffer.from('00000000', 'hex'); //block start_height, can be empty
   //If protocol version is new enough, add do not relay transactions flag byte, outlined in BIP37
   //https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
   private relayTransactions: Buffer = Buffer.from([0x00]); // false by default
@@ -92,7 +97,7 @@ export class BTCP2P {
   private rejectedRetryAttempts = 0;
   private rejectedRetryPause = 2000;
 
-  private headers: Buffer | undefined;
+  private headers!: Buffer;
   private waitingForHeaders = false;
 
   //generalized vars
@@ -265,26 +270,27 @@ export class BTCP2P {
         this.connect();
       }
     });
-    this.client = this.connect();
+    this.client = this.connect(this.options.host, this.options.port);
+    this.setupMessageParser(this.client);
   }
 
-  private connect(): net.Socket {
+  public connect(host: string = '', port: number = 0): net.Socket {
     const client = net.connect({
-      host: this.options.host,
-      port: this.options.port
+      host: (host === '') ? this.options.host : host,
+      port: (port === 0) ? this.options.port : port
     }, () => {
       this.rejectedRetryAttempts = 0;
       this.sendVersion();
       this.startPings();
     });
-    this.client.on('close', () => {
+    client.on('close', () => {
       if (this.verack) {
         this.fireDisconnect({});
       } else if (this.validConnectionConfig) {
         this.fireConnectionRejected({});
       }
     });
-    this.client.on('error', (e: any) => {
+    client.on('error', (e: any) => {
       if (e.code === 'ECONNREFUSED') {
         this.fireError({message: 'connection failed'});
       } else {
@@ -297,7 +303,6 @@ export class BTCP2P {
       }
     });
 
-    this.setupMessageParser(this.client);
     return client;
   }
 
@@ -362,7 +367,7 @@ export class BTCP2P {
         });
       });
     };
-    // beginReadingMessage(null); // TODO do we need this?
+    beginReadingMessage(Buffer.from([]));
   }
 
   private handleInv(payload: Buffer): void {
@@ -596,5 +601,16 @@ export class BTCP2P {
       payload
     ]);
     this.client.write(message);
+  }
+
+  public internal(): any {
+    if (ENV === ENVS.test) {
+      return {
+        commandStringBuffer: commandStringBuffer,
+        readFlowingBytes: readFlowingBytes
+      }
+    } else {
+      return null;
+    }
   }
 }

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-      "paths": { "*": ["types/*"] },
-      "baseUrl": ".",
+    "paths": { "*": ["types/*"] },
+    "baseUrl": ".",
     "target": "es5",
     "module": "commonjs",
     "declaration": true,

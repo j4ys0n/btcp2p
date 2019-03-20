@@ -3,7 +3,7 @@ import * as net from 'net';
 declare type Handler<E> = (event: E) => void;
 export declare class BTCP2P {
     private options;
-    client: net.Socket | any;
+    client: net.Socket;
     private util;
     private magic;
     private magicInt;
@@ -76,7 +76,7 @@ export declare class BTCP2P {
     private fireVersion;
     on(event: string, handler: Handler<any>): void;
     constructor(options: any);
-    private connect;
+    connect(host?: string, port?: number): net.Socket;
     private sendVersion;
     private setupMessageParser;
     private handleInv;
@@ -94,5 +94,6 @@ export declare class BTCP2P {
     private handleHeaderRequest;
     private handleMessage;
     sendMessage(command: Buffer, payload: Buffer): void;
+    internal(): any;
 }
 export {};

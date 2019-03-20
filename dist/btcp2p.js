@@ -5,7 +5,12 @@ var crypto = require("crypto");
 var cryptoBinary = require("crypto-binary");
 // class imports
 var general_util_1 = require("./util/general.util");
-//general consts
+// testing flag
+var ENV = process.env.NODE_ENV;
+var ENVS = {
+    test: 'test'
+};
+// general consts
 var MINUTE = 60 * 1000;
 var CONNECTION_RETRY = 5 * MINUTE;
 var PING_INTERVAL = 5 * MINUTE;
@@ -159,7 +164,8 @@ var BTCP2P = /** @class */ (function () {
                 _this.connect();
             }
         });
-        this.client = this.connect();
+        this.client = this.connect(this.options.host, this.options.port);
+        this.setupMessageParser(this.client);
     }
     BTCP2P.prototype.onConnect = function (handler) {
         this.connectDispatcher.register(handler);
@@ -247,17 +253,19 @@ var BTCP2P = /** @class */ (function () {
                 break;
         }
     };
-    BTCP2P.prototype.connect = function () {
+    BTCP2P.prototype.connect = function (host, port) {
         var _this = this;
+        if (host === void 0) { host = ''; }
+        if (port === void 0) { port = 0; }
         var client = net.connect({
-            host: this.options.host,
-            port: this.options.port
+            host: (host === '') ? this.options.host : host,
+            port: (port === 0) ? this.options.port : port
         }, function () {
             _this.rejectedRetryAttempts = 0;
             _this.sendVersion();
             _this.startPings();
         });
-        this.client.on('close', function () {
+        client.on('close', function () {
             if (_this.verack) {
                 _this.fireDisconnect({});
             }
@@ -265,7 +273,7 @@ var BTCP2P = /** @class */ (function () {
                 _this.fireConnectionRejected({});
             }
         });
-        this.client.on('error', function (e) {
+        client.on('error', function (e) {
             if (e.code === 'ECONNREFUSED') {
                 _this.fireError({ message: 'connection failed' });
             }
@@ -278,7 +286,6 @@ var BTCP2P = /** @class */ (function () {
                 }, CONNECTION_RETRY);
             }
         });
-        this.setupMessageParser(this.client);
         return client;
     };
     BTCP2P.prototype.sendVersion = function () {
@@ -344,7 +351,7 @@ var BTCP2P = /** @class */ (function () {
                 });
             });
         };
-        // beginReadingMessage(null); // TODO do we need this?
+        beginReadingMessage(Buffer.from([]));
     };
     BTCP2P.prototype.handleInv = function (payload) {
         var count = payload.readUInt8(0);
@@ -569,6 +576,17 @@ var BTCP2P = /** @class */ (function () {
             payload
         ]);
         this.client.write(message);
+    };
+    BTCP2P.prototype.internal = function () {
+        if (ENV === ENVS.test) {
+            return {
+                commandStringBuffer: commandStringBuffer,
+                readFlowingBytes: readFlowingBytes
+            };
+        }
+        else {
+            return null;
+        }
     };
     return BTCP2P;
 }());
