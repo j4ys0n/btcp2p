@@ -1,17 +1,17 @@
 import * as crypto from 'crypto';
 
 export class Utils {
-  sha256(buffer: Buffer): Buffer {
+  public sha256(buffer: Buffer): Buffer {
     const hash1 = crypto.createHash('sha256');
     hash1.update(buffer);
     return hash1.digest();
   }
 
-  sha256d(buffer: Buffer): Buffer {
+  public sha256d(buffer: Buffer): Buffer {
     return this.sha256(this.sha256(buffer));
   }
 
-  varIntBuffer(n: number): Buffer {
+  public varIntBuffer(n: number): Buffer {
     if (n < 0xfd) {
       return new Buffer([n]);
     } else if (n <= 0xffff) {
@@ -32,27 +32,38 @@ export class Utils {
     }
   }
 
-  packUInt16LE(num: number): Buffer {
+  public packUInt16LE(num: number): Buffer {
     const buff = new Buffer(2);
     buff.writeUInt16LE(num, 0);
     return buff;
   }
 
-  packUInt32LE(num: number): Buffer {
+  public packUInt32LE(num: number): Buffer {
     const buff = new Buffer(4);
     buff.writeInt32LE(num, 0);
     return buff;
   }
 
-  packInt64LE(num: number): Buffer {
+  public packInt64LE(num: number): Buffer {
     const buff = new Buffer(8);
     buff.writeUInt32LE(num % Math.pow(2, 32), 0);
     buff.writeUInt32LE(Math.floor(num / Math.pow(2, 32)), 4);
     return buff;
   }
 
-  varStringBuffer(s: string): Buffer {
+  public varStringBuffer(s: string): Buffer {
     const strBuff = new Buffer(s);
     return Buffer.concat([this.varIntBuffer(strBuff.length), strBuff]);
+  }
+
+  private fixedLenStringBuffer(s: string, len: number): Buffer {
+    let buff = Buffer.allocUnsafe(len);
+    buff.fill(0);
+    buff.write(s);
+    return buff;
+  }
+
+  public commandStringBuffer(s: string): Buffer {
+    return this.fixedLenStringBuffer(s, 12);
   }
 }

@@ -3,15 +3,11 @@ import * as crypto from 'crypto';
 import { MessageParser } from 'crypto-binary';
 
 // class imports
+import { Events } from './events/events';
 import { Utils } from './util/general.util';
 
 // interface imports
 import { StartOptions, PeerAddress } from './interfaces/peer.interface';
-import {
-  ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
-  SentMessageEvent, PeerMessageEvent, BlockNotifyEvent,
-  TxNotifyEvent, ErrorEvent, VersionEvent
-} from './interfaces/events.interface';
 
 // testing flag
 const ENV = process.env.NODE_ENV;
@@ -23,31 +19,6 @@ const MINUTE = 60 * 1000;
 const CONNECTION_RETRY = 5 * MINUTE;
 const PING_INTERVAL = 5 * MINUTE;
 const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
-
-type Handler<E> = (event: E) => void;
-
-class EventDispatcher<E> {
-  private handlers: Handler<E>[] = [];
-  fire(event: E) {
-    for (let h of this.handlers) {
-      h(event);
-    }
-  }
-  register(handler: Handler<E>) {
-    this.handlers.push(handler);
-  }
-}
-
-const fixedLenStringBuffer = (s: string, len: number): Buffer => {
-  let buff = Buffer.allocUnsafe(len);
-  buff.fill(0);
-  buff.write(s);
-  return buff;
-}
-
-const commandStringBuffer = (s: string): Buffer => {
-  return fixedLenStringBuffer(s, 12);
-}
 
 const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, callback: Function): void => {
   let buff = (preRead) ? preRead : Buffer.from([]);
@@ -71,10 +42,14 @@ const createNonce = () => {
 
 export class BTCP2P {
   public client!: net.Socket;
-  private server!: net.Server;
+  protected server!: net.Server;
   private serverStarting: boolean = false;
   private serverStarted: boolean = false;
-  private util: Utils = new Utils();
+  protected clientEvents: Events = new Events();
+  protected serverEvents: Events = new Events();
+  public onClient = this.clientEvents.on.bind(this.clientEvents);
+  public onServer = this.serverEvents.on.bind(this.serverEvents);
+  protected util: Utils = new Utils();
   // bitcoin specific vars
   private magic: Buffer;
   private magicInt: number = 0;
@@ -105,138 +80,32 @@ export class BTCP2P {
   //generalized vars
   private validConnectionConfig = true;
   public commands = {
-    addr: commandStringBuffer('addr'),
-    alert: commandStringBuffer('alert'),
-    block: commandStringBuffer('block'),
-    blocktxn: commandStringBuffer('blocktxn'),
-    checkorder: commandStringBuffer('checkorder'),
-    feefilter: commandStringBuffer('feefilter'),
-    getaddr: commandStringBuffer('getaddr'),
-    getblocks: commandStringBuffer('getblocks'),
-    getblocktxn: commandStringBuffer('getblocktxn'),
-    getdata: commandStringBuffer('getdata'),
-    getheaders: commandStringBuffer('getheaders'),
-    headers: commandStringBuffer('headers'),
-    inv: commandStringBuffer('inv'),
-    mempool: commandStringBuffer('mempool'),
-    notfound: commandStringBuffer('notfound'),
-    ping: commandStringBuffer('ping'),
-    pong: commandStringBuffer('pong'),
-    reject: commandStringBuffer('reject'),
-    reply: commandStringBuffer('reply'),
-    sendcmpct: commandStringBuffer('sendcmpct'),
-    sendheaders: commandStringBuffer('sendheaders'),
-    submitorder: commandStringBuffer('submitorder'),
-    tx: commandStringBuffer('tx'),
-    verack: commandStringBuffer('verack'),
-    version: commandStringBuffer('version')
+    addr: this.util.commandStringBuffer('addr'),
+    alert: this.util.commandStringBuffer('alert'),
+    block: this.util.commandStringBuffer('block'),
+    blocktxn: this.util.commandStringBuffer('blocktxn'),
+    checkorder: this.util.commandStringBuffer('checkorder'),
+    feefilter: this.util.commandStringBuffer('feefilter'),
+    getaddr: this.util.commandStringBuffer('getaddr'),
+    getblocks: this.util.commandStringBuffer('getblocks'),
+    getblocktxn: this.util.commandStringBuffer('getblocktxn'),
+    getdata: this.util.commandStringBuffer('getdata'),
+    getheaders: this.util.commandStringBuffer('getheaders'),
+    headers: this.util.commandStringBuffer('headers'),
+    inv: this.util.commandStringBuffer('inv'),
+    mempool: this.util.commandStringBuffer('mempool'),
+    notfound: this.util.commandStringBuffer('notfound'),
+    ping: this.util.commandStringBuffer('ping'),
+    pong: this.util.commandStringBuffer('pong'),
+    reject: this.util.commandStringBuffer('reject'),
+    reply: this.util.commandStringBuffer('reply'),
+    sendcmpct: this.util.commandStringBuffer('sendcmpct'),
+    sendheaders: this.util.commandStringBuffer('sendheaders'),
+    submitorder: this.util.commandStringBuffer('submitorder'),
+    tx: this.util.commandStringBuffer('tx'),
+    verack: this.util.commandStringBuffer('verack'),
+    version: this.util.commandStringBuffer('version')
   };
-
-  // events
-  // connect
-  private connectDispatcher = new EventDispatcher<ConnectEvent>();
-  private onConnect(handler: Handler<ConnectEvent>): void {
-    this.connectDispatcher.register(handler);
-  }
-  private fireConnect(event: ConnectEvent): void {
-    this.connectDispatcher.fire(event);
-  }
-  // disconnect
-  private disconnectDispatcher = new EventDispatcher<DisconnectEvent>();
-  private onDisconnect(handler: Handler<DisconnectEvent>): void {
-    this.disconnectDispatcher.register(handler);
-  }
-  private fireDisconnect(event: DisconnectEvent): void {
-    this.disconnectDispatcher.fire(event);
-  }
-  // connection rejected
-  private connectionRejectedDispatcher = new EventDispatcher<ConnectionRejectedEvent>();
-  private onConnectionRejected(handler: Handler<ConnectionRejectedEvent>): void {
-    this.connectionRejectedDispatcher.register(handler);
-  }
-  private fireConnectionRejected(event: ConnectionRejectedEvent): void {
-    this.connectionRejectedDispatcher.fire(event);
-  }
-  // error
-  private errorDispatcher = new EventDispatcher<ErrorEvent>();
-  private onError(handler: Handler<ErrorEvent>): void {
-    this.errorDispatcher.register(handler);
-  }
-  private fireError(event: ErrorEvent): void {
-    this.errorDispatcher.fire(event);
-  }
-  // message
-  private sentMessageDispatcher = new EventDispatcher<SentMessageEvent>();
-  private onSentMessage(handler: Handler<SentMessageEvent>): void {
-    this.sentMessageDispatcher.register(handler);
-  }
-  private fireSentMessage(event: SentMessageEvent): void {
-    this.sentMessageDispatcher.fire(event);
-  }
-  // block notify
-  private blockNotifyDispatcher = new EventDispatcher<BlockNotifyEvent>();
-  private onBlockNotify(handler: Handler<BlockNotifyEvent>): void {
-    this.blockNotifyDispatcher.register(handler);
-  }
-  private fireBlockNotify(event: BlockNotifyEvent): void {
-    this.blockNotifyDispatcher.fire(event);
-  }
-  // tx notify
-  private txNotifyDispatcher = new EventDispatcher<TxNotifyEvent>();
-  private onTxNotify(handler: Handler<TxNotifyEvent>): void {
-    this.txNotifyDispatcher.register(handler);
-  }
-  private fireTxNotify(event: TxNotifyEvent): void {
-    this.txNotifyDispatcher.fire(event);
-  }
-  // peer message
-  private peerMessageDispatcher = new EventDispatcher<PeerMessageEvent>();
-  private onPeerMessage(handler: Handler<PeerMessageEvent>): void {
-    this.peerMessageDispatcher.register(handler);
-  }
-  private firePeerMessage(event: PeerMessageEvent): void {
-    this.peerMessageDispatcher.fire(event);
-  }
-  // version message
-  private versionDispatcher = new EventDispatcher<VersionEvent>();
-  private onVersion(handler: Handler<VersionEvent>): void {
-    this.versionDispatcher.register(handler);
-  }
-  private fireVersion(event: VersionEvent): void {
-    this.versionDispatcher.fire(event);
-  }
-  // event handlers
-  public on(event: string, handler: Handler<any>): void {
-    switch(event) {
-      case 'connect':
-        this.onConnect(handler);
-        break;
-      case 'disconnect':
-        this.onDisconnect(handler);
-        break;
-      case 'version':
-        this.onVersion(handler);
-        break;
-      case 'error':
-        this.onError(handler);
-        break;
-      case 'block':
-        this.onBlockNotify(handler);
-        break;
-      case 'tx':
-        this.onTxNotify(handler);
-        break;
-      case 'peer_message':
-        this.onPeerMessage(handler);
-        break;
-      case 'sent_message':
-        this.onSentMessage(handler);
-        break;
-      default:
-        console.error('no event named', event);
-        break;
-    }
-  }
 
   /**
    * @param options: StartOptions = {
@@ -256,7 +125,7 @@ export class BTCP2P {
     try {
       this.magicInt = this.magic.readUInt32LE(0);
     } catch (e) {
-      this.fireError({message: 'read peer magic failed in constructor'});
+      this.clientEvents.fireError({message: 'read peer magic failed in constructor'});
       return;
     }
 
@@ -264,8 +133,8 @@ export class BTCP2P {
       this.relayTransactions = Buffer.from([]);
     }
 
-    this.onConnectionRejected(event => {
-      this.fireError({message: 'connection rejected, maybe banned, or old protocol version'});
+    this.clientEvents.onConnectionRejected(event => {
+      this.clientEvents.fireError({message: 'connection rejected, maybe banned, or old protocol version'});
       if (this.options.persist) {
         // pause for 2 seconds, try again.
         if (this.rejectedRetryAttempts < this.rejectedRetryMax) {
@@ -274,24 +143,22 @@ export class BTCP2P {
             this.connect();
           }, this.rejectedRetryPause);
         } else {
-          this.fireError({message: 'max rejected retries hit (' + this.rejectedRetryMax + ')'});
+          this.clientEvents.fireError({message: 'max rejected retries hit (' + this.rejectedRetryMax + ')'});
         }
       }
     });
 
-    this.onDisconnect(event => {
+    this.clientEvents.onDisconnect(event => {
       this.verack = false;
       if (this.options.persist) {
         this.connect();
       }
     });
 
+    // start server and if necessary init connection
     if (this.options.listenPort !== undefined) {
       this.server = net.createServer((socket) => {
-        socket.on('data', (data) => {
-          console.log('local server:');
-          console.log(data);
-        });
+        this.setupMessageParser(socket, this.serverEvents);
       });
       if (
         this.options.host !== undefined &&
@@ -304,6 +171,7 @@ export class BTCP2P {
       }
     }
 
+    // if no server to start, just init connection
     if (
       this.options.host !== undefined &&
       this.options.port !== undefined &&
@@ -315,10 +183,11 @@ export class BTCP2P {
 
   private initConnection(): void {
     this.client = this.connect(this.options.host, this.options.port);
-    this.setupMessageParser(this.client);
+    this.setupMessageParser(this.client, this.clientEvents);
   }
 
   public startServer(): Promise<any> {
+    // not started buy default
     return new Promise((resolve, reject) => {
       if (!this.serverStarted && !this.serverStarting) {
         this.serverStarting = true;
@@ -338,27 +207,28 @@ export class BTCP2P {
     this.server.close();
   }
 
+  // client only
   public connect(host: string = '', port: number = 0): net.Socket {
     const client = net.connect({
       host: (host === '') ? this.options.host as string : host,
       port: (port === 0) ? this.options.port as number : port
     }, () => {
       this.rejectedRetryAttempts = 0;
-      this.sendVersion();
-      this.startPings();
+      this.sendVersion(this.clientEvents, client);
+      this.startPings(this.clientEvents, client);
     });
     client.on('close', () => {
       if (this.verack) {
-        this.fireDisconnect({});
+        this.clientEvents.fireDisconnect({});
       } else if (this.validConnectionConfig) {
-        this.fireConnectionRejected({});
+        this.clientEvents.fireConnectionRejected({});
       }
     });
     client.on('error', (e: any) => {
       if (e.code === 'ECONNREFUSED') {
-        this.fireError({message: 'connection failed'});
+        this.clientEvents.fireError({message: 'connection failed'});
       } else {
-        this.fireError({message: 'socket error'});
+        this.clientEvents.fireError({message: 'socket error'});
       }
       if (this.options.persist) {
         setTimeout(() => {
@@ -370,7 +240,8 @@ export class BTCP2P {
     return client;
   }
 
-  private sendVersion(): void {
+  // client and server
+  protected sendVersion(events: Events, socket: net.Socket): void {
     const payload = Buffer.concat([
       this.util.packUInt32LE(this.options.protocolVersion),
       this.networkServices,
@@ -382,23 +253,28 @@ export class BTCP2P {
       this.blockStartHeight,
       this.relayTransactions
     ]);
-    this.sendMessage(this.commands.version, payload);
-    this.fireSentMessage({command: 'version'});
+    this.sendMessage(this.commands.version, payload, socket);
+    events.fireSentMessage({command: 'version'});
   }
 
-  private setupMessageParser(client: net.Socket): void {
+  public getAddresses(socket: net.Socket): void {
+    this.sendMessage(this.commands.getaddr, Buffer.from([]), socket);
+  }
+
+  // client and server
+  private setupMessageParser(socket: net.Socket, events: Events): void {
     const beginReadingMessage = (preRead: Buffer) => {
-      readFlowingBytes(client, 24, preRead, (header: Buffer, lopped: Buffer) => {
+      readFlowingBytes(socket, 24, preRead, (header: Buffer, lopped: Buffer) => {
         let msgMagic;
         try {
           msgMagic = header.readUInt32LE(0);
         } catch (e) {
-          this.fireError({message: 'read peer magic failed in setupMessageParser'});
+          events.fireError({message: 'read peer magic failed in setupMessageParser'});
           return;
         }
 
         if (msgMagic !== this.magicInt) {
-          this.fireError({message: 'bad magic'});
+          events.fireError({message: 'bad magic'});
           try {
             while (header.readUInt32LE(0) !== this.magicInt && header.length >= 4) {
               header = header.slice(1);
@@ -420,13 +296,13 @@ export class BTCP2P {
         const msgLength: number = header.readUInt32LE(16);
         const msgChecksum: number = header.readUInt32LE(20);
         // console.log('--', msgCommand, '--', header);
-        readFlowingBytes(client, msgLength, lopped, (payload: Buffer, lopped: Buffer) => {
+        readFlowingBytes(socket, msgLength, lopped, (payload: Buffer, lopped: Buffer) => {
           if (this.util.sha256d(payload).readUInt32LE(0) !== msgChecksum) {
-            this.fireError({message: 'bad payload - failed checksum'});
+            events.fireError({message: 'bad payload - failed checksum'});
             // beginReadingMessage(null); // TODO do we need this?
             return;
           }
-          this.handleMessage(msgCommand, payload);
+          this.handleMessage(msgCommand, payload, events, socket);
           beginReadingMessage(lopped);
         });
       });
@@ -434,7 +310,8 @@ export class BTCP2P {
     beginReadingMessage(Buffer.from([]));
   }
 
-  private handleInv(payload: Buffer): void {
+  // client and server
+  private handleInv(payload: Buffer, events: Events): void {
     let count = payload.readUInt8(0);
     payload = payload.slice(1);
     if (count >= 0xfd) {
@@ -449,7 +326,7 @@ export class BTCP2P {
 
       }
       if (type) {
-        this.firePeerMessage({command: 'inv', payload: {type: type}});
+        events.firePeerMessage({command: 'inv', payload: {type: type}});
       }
       switch (type) {
         case this.invCodes.error:
@@ -457,11 +334,11 @@ export class BTCP2P {
           break;
         case this.invCodes.tx:
           let tx = payload.slice(4, 36).toString('hex');
-          this.fireTxNotify({hash: tx});
+          events.fireTxNotify({hash: tx});
           break;
         case this.invCodes.block:
           let block = payload.slice(4, 36).reverse().toString('hex');
-          this.fireBlockNotify({hash: block});
+          events.fireBlockNotify({hash: block});
           break;
         case this.invCodes.blockFiltered:
           let fBlock = payload.slice(4, 36).reverse().toString('hex');
@@ -476,7 +353,8 @@ export class BTCP2P {
     }
   }
 
-  private handleVersion(payload: Buffer): void {
+  // client and server
+  private handleVersion(payload: Buffer, events: Events): void {
     const s = new MessageParser(payload);
     let parsed = {
       version: s.readUInt32LE(0),
@@ -492,10 +370,10 @@ export class BTCP2P {
     if (parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
       parsed.time = new Date(parsed.time.readUInt32LE(0)*1000);
     }
-    this.fireVersion(parsed);
+    events.fireVersion(parsed);
   }
 
-  private handleReject(payload: Buffer): void {
+  private handleReject(payload: Buffer, events: Events): void {
     console.log(payload);
   }
 
@@ -515,7 +393,8 @@ export class BTCP2P {
     }
   }
 
-  private getAddr(buff: Buffer): PeerAddress {
+  // client and server
+  private getAddr(buff: Buffer, events: Events): PeerAddress {
     let addr: PeerAddress = {
       hostRaw: Buffer.from([]),
       host: '',
@@ -539,48 +418,47 @@ export class BTCP2P {
       addr.ipVersion = host.version;
       addr.port = buff.readUInt16BE(28);
     } else {
-      this.fireError({message: 'address field length not 30', payload: buff});
+      events.fireError({message: 'address field length not 30', payload: buff});
     }
     return addr;
   }
 
-  private handleAddr(payload: Buffer): void {
-    const addrs = this.parseAddrMessage(payload);
-    this.firePeerMessage({command: 'addr', payload: {host: this.options.host, port: this.options.port, addresses: addrs}});
+  // client and server
+  private handleAddr(payload: Buffer, events: Events): void {
+    const addrs = this.parseAddrMessage(payload, events);
+    events.fireAddr({host: this.options.host, port: this.options.port, addresses: addrs});
   }
 
-  private parseAddrMessage(payload: Buffer): PeerAddress[] {
+  private parseAddrMessage(payload: Buffer, events: Events): PeerAddress[] {
     const s = new MessageParser(payload);
     let addrs: Array<PeerAddress> = [];
     let addrNum = s.readVarInt();
     for (let i = 0; i < addrNum; i++) {
-      const addr: PeerAddress = this.getAddr(<Buffer>s.raw(30));
+      const addr: PeerAddress = this.getAddr(<Buffer>s.raw(30), events);
       addrs.push(addr);
     }
     return addrs;
   }
 
-  private startPings(): void {
+  private startPings(events: Events, socket: net.Socket): void {
     setInterval(() => {
-      this.sendPing();
+      this.sendPing(events, socket);
     }, PING_INTERVAL);
   }
 
-  private sendPing(): void {
+  // client and server
+  protected sendPing(events: Events, socket: net.Socket): void {
     const payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
-    this.sendMessage(this.commands.ping, payload);
-    this.fireSentMessage({command: 'ping'});
+    this.sendMessage(this.commands.ping, payload, socket);
+    events.fireSentMessage({command: 'ping'});
   }
 
-  private handlePing(payload: Buffer): void {
+  // client and server
+  private handlePing(payload: Buffer, events: Events, socket: net.Socket): void {
     let nonce: string = '';
     let sendBack: Buffer;
     if (payload.length) {
       nonce = new MessageParser(payload).raw(8).toString('hex');
-      // nonce = payload.readUInt16BE(0);
-      // nonce += payload.readUInt16BE(2);
-      // nonce += payload.readUInt16BE(4);
-      // nonce += payload.readUInt16BE(6);
     }
     if (nonce !== '') {
       // sendBack = fixedLenStringBuffer(nonce, 8);
@@ -588,65 +466,82 @@ export class BTCP2P {
     } else {
       sendBack = Buffer.from([]);
     }
-    // console.log(sendBack);
-    this.sendMessage(this.commands.pong, sendBack);
-    this.fireSentMessage({command: 'pong', payload: {message: 'nonce: ' + nonce}});
+    events.firePing(sendBack);
+    this.sendMessage(this.commands.pong, sendBack, socket);
+    events.fireSentMessage({command: 'pong', payload: {message: 'nonce: ' + nonce}});
   }
 
-  private sendHeadersBack(payload: Buffer): void {
-    this.sendMessage(this.commands.headers, payload);
-    this.fireSentMessage({command: 'headers', payload: {}});
+  private handlePong(payload: Buffer, events: Events, socket: net.Socket): void {
+    let nonce: Buffer;
+    if (payload.length) {
+      nonce = new MessageParser(payload).raw(8)
+    } else {
+      nonce = Buffer.from([]);
+    }
+    events.firePong(nonce);
+  }
+
+  // client and server
+  private sendHeadersBack(payload: Buffer, events: Events, socket: net.Socket): void {
+    this.sendMessage(this.commands.headers, payload, socket);
+    events.fireSentMessage({command: 'headers', payload: {}});
   }
 
   private handleHeaders(payload: Buffer): void {
     this.headers = payload;
   }
 
-  private handleHeaderRequest(payload: Buffer): void {
+  // client and server
+  private handleHeaderRequest(payload: Buffer, events: Events, socket: net.Socket): void {
     if (this.headers === undefined) {
       this.waitingForHeaders = true;
-      this.sendMessage(this.commands.getheaders, payload);
-      this.fireSentMessage({command: 'getheaders', payload: {}});
+      this.sendMessage(this.commands.getheaders, payload, socket);
+      events.fireSentMessage({command: 'getheaders', payload: {}});
     } else {
-      this.sendHeadersBack(this.headers);
+      this.sendHeadersBack(this.headers, events, socket);
     }
   }
 
-  private handleMessage(command: string, payload: Buffer): void {
-    this.firePeerMessage({command: command});
+  // client and server
+  private handleMessage(command: string, payload: Buffer, events: Events, socket: net.Socket): void {
+    events.firePeerMessage({command: command});
     // console.log(payload);
     switch (command) {
       case this.commands.ping.toString():
-        this.handlePing(payload);
+        this.handlePing(payload, events, socket);
+        break;
+      case this.commands.pong.toString():
+        this.handlePong(payload, events, socket);
         break;
       case this.commands.inv.toString():
-        this.handleInv(payload);
+        this.handleInv(payload, events);
         break;
       case this.commands.addr.toString():
-        this.handleAddr(payload);
+        this.handleAddr(payload, events);
         break;
       case this.commands.verack.toString():
+        events.fireVerack(true);
         if (!this.verack) {
           this.verack = true;
-          this.fireConnect({});
+          events.fireConnect({});
         }
         break;
       case this.commands.version.toString():
-        this.sendMessage(this.commands.verack, Buffer.from([]));
-        this.fireSentMessage({command: 'verack'});
-        this.handleVersion(payload);
+        this.sendMessage(this.commands.verack, Buffer.from([]), socket);
+        events.fireSentMessage({command: 'verack'});
+        this.handleVersion(payload, events);
         break;
       case this.commands.reject.toString():
-        this.handleReject(payload);
+        this.handleReject(payload, events);
         break;
       case this.commands.getheaders.toString():
-        this.handleHeaderRequest(payload);
+        this.handleHeaderRequest(payload, events, socket);
         break;
       case this.commands.headers.toString():
         if (this.waitingForHeaders) {
           this.headers = payload;
           this.waitingForHeaders = false;
-          this.sendHeadersBack(payload);
+          this.sendHeadersBack(payload, events, socket);
         } else {
           this.handleHeaders(payload);
         }
@@ -657,7 +552,7 @@ export class BTCP2P {
     }
   }
 
-  public sendMessage(command: Buffer, payload: Buffer): void {
+  private sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
     const message = Buffer.concat([
       this.magic,
       command,
@@ -665,17 +560,6 @@ export class BTCP2P {
       this.util.sha256d(payload).slice(0,4),
       payload
     ]);
-    this.client.write(message);
-  }
-
-  public internal(): any {
-    if (ENV === ENVS.test) {
-      return {
-        commandStringBuffer: commandStringBuffer,
-        readFlowingBytes: readFlowingBytes
-      }
-    } else {
-      return null;
-    }
+    socket.write(message);
   }
 }
