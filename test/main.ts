@@ -2,9 +2,6 @@ const chai = require('chai');
 const expect = chai.expect;
 const should = chai.should();
 
-import * as net from 'net';
-import { MessageBuilder } from 'crypto-binary';
-
 import { BTCP2P } from '../lib/btcp2p';
 import { Events } from '../lib/events/events';
 import {
@@ -37,16 +34,17 @@ class BTCP2PTest extends BTCP2P {
   public clientEvents;
   public serverEvents;
   public util;
+  public message;
 
-  public sendPing(events: Events, socket: net.Socket): void {
-    super.sendPing(events, socket);
-  }
-  public sendVersion(events: Events, socket: net.Socket): void {
-    super.sendVersion(events, socket);
-  }
-  public sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
-    super.sendMessage(command, payload, socket);
-  }
+  // public sendPing(events: Events, socket: net.Socket): void {
+  //   super.sendPing(events, socket);
+  // }
+  // public sendVersion(events: Events, socket: net.Socket): void {
+  //   super.sendVersion(events, socket);
+  // }
+  // public sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
+  //   super.sendMessage(command, payload, socket);
+  // }
 }
 
 describe('Unit tests', () => {
@@ -86,29 +84,29 @@ describe('Unit tests', () => {
         expect(msg.command).to.be.equal('version');
         done();
       });
-      btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
     });
     it('server should send event for peer_message when message received (version)', (done) => {
       btcp2p.onServer('peer_message', (msg) => {
         btcp2p.serverEvents.clearPeerMessage();
-        expect(msg.command).to.be.equal(btcp2p.commands.version.toString());
+        expect(msg.command).to.be.equal(btcp2p.message.commands.version.toString());
         done();
       });
-      btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
     });
     it('server should get version when client sends version', (done) => {
       btcp2p.onServer('version', () => {
         btcp2p.serverEvents.clearVersion();
         done();
       });
-      btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
     });
     it('client should get verack when client sends version', (done) => {
       btcp2p.onClient('verack', () => {
         btcp2p.clientEvents.clearVerack();
         done();
       });
-      btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
     });
     it('client should fire reject event when server sends reject message', (done) => {
       const msg = 'block';
@@ -125,7 +123,7 @@ describe('Unit tests', () => {
         done();
       });
 
-      btcp2p.sendReject(msg, ccode, reason, extra, btcp2p.serverSocket);
+      btcp2p.message.sendReject(msg, ccode, reason, extra, btcp2p.serverSocket);
     });
 
     it('server should get ping and client should get pong with matching nonce when client sends ping', (done) => {
@@ -150,7 +148,7 @@ describe('Unit tests', () => {
         pongNonce = nonce;
         checkNonces();
       });
-      btcp2p.sendPing(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.message.sendPing(btcp2p.clientEvents, btcp2p.client);
     });
 
   })

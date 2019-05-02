@@ -36,3 +36,6 @@ export interface RejectedEvent {
   reason: string;
   extra: string;
 }
+export interface AddressEvent {
+  addresses: Array<any>
+}
