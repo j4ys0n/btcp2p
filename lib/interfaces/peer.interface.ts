@@ -3,8 +3,8 @@ export interface StartOptions {
   name: string;
   peerMagic: string;
   disableTransactions: boolean;
-  connectHost: string;
-  connectPort?: number;
+  host?: string;
+  port?: number;
   listenPort?: number;
   protocolVersion: number;
   persist: boolean;

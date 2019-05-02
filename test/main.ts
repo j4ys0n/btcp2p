@@ -12,8 +12,8 @@ const unitTestOptions = {
   name: 'litecoin',
   peerMagic: 'fbc0b6db',
   disableTransactions: true,
-  connectHost: 'localhost',
-  connectPort: 3003,
+  host: 'localhost',
+  port: 3003,
   listenPort: 3003,
   protocolVersion: 70015,
   persist: false
@@ -23,8 +23,8 @@ const integrationTestOptions = {
   name: 'litecoin',
   peerMagic: 'fbc0b6db',
   disableTransactions: true,
-  connectHost: '34.201.114.34',
-  connectPort: 9333,
+  host: '34.201.114.34',
+  port: 9333,
   protocolVersion: 70015,
   persist: false
 };

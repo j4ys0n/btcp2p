@@ -243,8 +243,8 @@ export class BTCP2P {
    *  name: string,
    *  peerMagic: string,
    *  disableTransactions: boolean,
-   *  connectHost: string,
-   *  connectPort: number,
+   *  host: string,
+   *  port: number,
    *  listenPort: number,
    *  protocolVersion: number,
    *  persist: boolean
@@ -294,8 +294,8 @@ export class BTCP2P {
         });
       });
       if (
-        this.options.connectHost !== undefined &&
-        this.options.connectPort !== undefined
+        this.options.host !== undefined &&
+        this.options.port !== undefined
       ) {
         this.startServer()
         .then(() => {
@@ -305,8 +305,8 @@ export class BTCP2P {
     }
 
     if (
-      this.options.connectHost !== undefined &&
-      this.options.connectPort !== undefined &&
+      this.options.host !== undefined &&
+      this.options.port !== undefined &&
       this.options.listenPort === undefined
     ) {
       this.initConnection();
@@ -314,7 +314,7 @@ export class BTCP2P {
   }
 
   private initConnection(): void {
-    this.client = this.connect(this.options.connectHost, this.options.connectPort);
+    this.client = this.connect(this.options.host, this.options.port);
     this.setupMessageParser(this.client);
   }
 
@@ -340,8 +340,8 @@ export class BTCP2P {
 
   public connect(host: string = '', port: number = 0): net.Socket {
     const client = net.connect({
-      host: (host === '') ? this.options.connectHost as string : host,
-      port: (port === 0) ? this.options.connectPort as number : port
+      host: (host === '') ? this.options.host as string : host,
+      port: (port === 0) ? this.options.port as number : port
     }, () => {
       this.rejectedRetryAttempts = 0;
       this.sendVersion();
@@ -546,7 +546,7 @@ export class BTCP2P {
 
   private handleAddr(payload: Buffer): void {
     const addrs = this.parseAddrMessage(payload);
-    this.firePeerMessage({command: 'addr', payload: {host: this.options.connectHost, port: this.options.connectPort, addresses: addrs}});
+    this.firePeerMessage({command: 'addr', payload: {host: this.options.host, port: this.options.port, addresses: addrs}});
   }
 
   private parseAddrMessage(payload: Buffer): PeerAddress[] {
