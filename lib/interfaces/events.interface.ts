@@ -33,6 +33,7 @@ export interface VersionEvent {
 export interface RejectedEvent {
   message: string;
   ccode: number;
+  name: string;
   reason: string;
   extra: string;
 }

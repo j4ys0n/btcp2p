@@ -6,6 +6,12 @@ import { Events } from '../events/events';
 import { Utils } from '../util/general.util';
 import { MessageHandlers } from './message.handlers';
 
+export interface MessageOptions {
+  magic: string;
+  protocolVersion: number;
+  relayTransactions: boolean;
+}
+
 const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, callback: Function): void => {
   let buff = (preRead) ? preRead : Buffer.from([]);
   const readData = (data: any) => {
@@ -26,10 +32,14 @@ const createNonce = () => {
   return crypto.pseudoRandomBytes(8)
 }
 
+const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
+
 export class Message {
   protected util: Utils = new Utils();
   protected handlers: MessageHandlers = new MessageHandlers();
 
+  private magic!: Buffer;
+  private magicInt: number = 0;
   // version message vars
   private networkServices: Buffer = Buffer.from('0100000000000000', 'hex'); //NODE_NETWORK services (value 1 packed as uint64)
   private emptyNetAddress: Buffer = Buffer.from('010000000000000000000000000000000000ffff000000000000', 'hex');
@@ -37,7 +47,7 @@ export class Message {
   private blockStartHeight: Buffer = Buffer.from('00000000', 'hex'); //block start_height, can be empty
   //If protocol version is new enough, add do not relay transactions flag byte, outlined in BIP37
   //https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
-  private relayTransactions: Buffer = Buffer.from([0x00]); // false by default
+  private relayTransactions: Buffer = Buffer.from('0x00', 'hex'); // false by default
 
   public commands = {
     addr: this.util.commandStringBuffer('addr'),
@@ -67,7 +77,27 @@ export class Message {
     version: this.util.commandStringBuffer('version')
   };
 
-  constructor(private magic, private magicInt, private options) {}
+  /**
+   * @param messageOptions: MessageOptions = {
+   *  magic: string,
+   *  relayTransactions: boolean,
+   *  protocolVersion: number,
+   * }
+   */
+
+  constructor(private messageOptions: MessageOptions) {
+    this.magic = Buffer.from(this.messageOptions.magic, 'hex');
+    try {
+      this.magicInt = this.magic.readUInt32LE(0);
+    } catch (e) {
+      throw new Error('read peer magic failed in constructor');
+    }
+    if (this.messageOptions.relayTransactions) {
+      this.relayTransactions = Buffer.from('0x01', 'hex');
+    } else {
+      this.relayTransactions = Buffer.from('0x00', 'hex');
+    }
+  }
 
   sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
     const message = Buffer.concat([
@@ -81,8 +111,9 @@ export class Message {
   }
 
   sendVersion(events: Events, socket: net.Socket): void {
+    // https://en.bitcoin.it/wiki/Protocol_documentation#version
     const payload = Buffer.concat([
-      this.util.packUInt32LE(this.options.protocolVersion),
+      this.util.packUInt32LE(this.messageOptions.protocolVersion),
       this.networkServices,
       this.util.packInt64LE(Date.now() / 1000 | 0),
       this.emptyNetAddress,
@@ -112,8 +143,21 @@ export class Message {
     events.fireSentMessage({command: 'getheaders', payload: {}});
   }
 
-  getAddresses(socket: net.Socket): void {
+  sendGetAddr(events: Events, socket: net.Socket): void {
     this.sendMessage(this.commands.getaddr, Buffer.from([]), socket);
+    events.fireSentMessage({command: 'getaddr', payload: {}});
+  }
+
+  sendAddr(events: Events, socket: net.Socket, ip: string, port: number): void {
+    const count = Buffer.from([0x01]);
+    const date = this.util.packUInt32LE(Date.now() / 1000 | 0);
+    const host = this.ipTo16ByteBuffer(ip);
+    const prt = this.util.packUInt16BE(port);
+    const payload = Buffer.concat([
+      count, date, this.networkServices, host, prt
+    ]);
+    this.sendMessage(this.commands.addr, payload, socket);
+    events.fireSentMessage({command: 'getaddr', payload: payload});
   }
 
   sendReject(msg: string, ccode: number, reason: string, extra: string, socket: net.Socket): void {
@@ -184,6 +228,17 @@ export class Message {
     beginReadingMessage(Buffer.from([]));
   }
 
+  private ipTo16ByteBuffer(ip: string) {
+    const ipv4Addr = ip.split('.').map((segment: string) => {
+      return parseInt(segment, 10)
+    });
+    const ipv6Padded = [
+      IPV6_IPV4_PADDING,
+      Buffer.from(ipv4Addr)
+    ]
+    return Buffer.concat(ipv6Padded);
+  }
+
   private handleMessage(command: string, payload: Buffer, events: Events, socket: net.Socket): void {
     events.firePeerMessage({command: command});
     // console.log(payload);
@@ -213,6 +268,7 @@ export class Message {
       case this.commands.version.toString():
         this.handlers.handleVersion(payload, events)
         .then((version) => {
+          // console.log(version);
           this.sendMessage(this.commands.verack, Buffer.from([]), socket);
           events.fireSentMessage({command: 'verack'});
         });

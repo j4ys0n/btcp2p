@@ -37,6 +37,11 @@ export class Utils {
     buff.writeUInt16LE(num, 0);
     return buff;
   }
+  public packUInt16BE(num: number): Buffer {
+    const buff = new Buffer(2);
+    buff.writeUInt16BE(num, 0);
+    return buff;
+  }
 
   public packUInt32LE(num: number): Buffer {
     const buff = new Buffer(4);

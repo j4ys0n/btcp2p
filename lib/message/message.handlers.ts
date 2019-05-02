@@ -4,34 +4,57 @@ import { Events } from '../events/events';
 import { RejectedEvent, AddressEvent } from '../interfaces/events.interface';
 import { PeerAddress } from '../interfaces/peer.interface';
 
-export interface INonce {
+export interface Nonce {
   nonce: Buffer;
+}
+
+export interface Version {
+  version: number;
+  services: number;
+  time: any;
+  addr_recv: string;
+  addr_from: string;
+  nonce: string;
+  client: string;
+  height: number;
+  relay: boolean;
 }
 
 const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
 
 export class MessageHandlers {
-  //https://en.bitcoin.it/wiki/Protocol_specification#Inventory_Vectors
-  private invCodes = {
+  // https://en.bitcoin.it/wiki/Protocol_specification#Inventory_Vectors
+  protected invCodes = {
     error: 0,
     tx: 1,
     block: 2,
     blockFiltered: 3,
     blockCompact: 4
   };
+  // https://en.bitcoin.it/wiki/Protocol_documentation#reject
+  protected rejectCodes = {
+    1: 'REJECT_MALFORMED',
+    10: 'REJECT_INVALID',
+    11: 'REJECT_OBSOLETE',
+    12: 'REJECT_DUPLICATE',
+    40: 'REJECT_NONSTANDARD',
+    41: 'REJECT_DUST',
+    42: 'REJECT_INSUFFICIENTFEE',
+    43: 'REJECT_CHECKPOINT'
+  }
 
   constructor() {}
 
-  handlePing(payload: Buffer, events: Events): Promise<INonce> {
+  handlePing(payload: Buffer, events: Events): Promise<Nonce> {
     let nonce: Buffer = this.parseNonce(payload);
     events.firePing(nonce);
-    return Promise.resolve(<INonce>{nonce});
+    return Promise.resolve(<Nonce>{nonce});
   }
 
-  handlePong(payload: Buffer, events: Events): Promise<INonce> {
+  handlePong(payload: Buffer, events: Events): Promise<Nonce> {
     let nonce: Buffer = this.parseNonce(payload);
     events.firePong(nonce);
-    return Promise.resolve(<INonce>{nonce});
+    return Promise.resolve(<Nonce>{nonce});
   }
 
   handleReject(payload: Buffer, events: Events): Promise<RejectedEvent> {
@@ -39,6 +62,7 @@ export class MessageHandlers {
     const messageLen = p.readInt8();
     const message = p.raw(messageLen).toString();
     const ccode = p.readInt8();
+    const name = this.rejectCodes[ccode];
     const reasonLen = p.readInt8();
     const reason = p.raw(reasonLen).toString();
     const extraLen = (p.buffer.length -1) - (p.pointer -1);
@@ -47,6 +71,7 @@ export class MessageHandlers {
     let rejected: RejectedEvent = {
       message,
       ccode,
+      name,
       reason,
       extra
     };
@@ -54,9 +79,10 @@ export class MessageHandlers {
     return Promise.resolve(rejected);
   }
 
-  handleVersion(payload: Buffer, events: Events): Promise<any> {
+  handleVersion(payload: Buffer, events: Events): Promise<Version> {
     const s = new MessageParser(payload);
-    let parsed = {
+    // https://en.bitcoin.it/wiki/Protocol_documentation#version
+    let parsed: Version = {
       version: s.readUInt32LE(0),
       services: parseInt(s.raw(8).slice(0,1).toString('hex'), 16),
       time: s.raw(8),
@@ -67,11 +93,29 @@ export class MessageHandlers {
       height: s.readUInt32LE(),
       relay: Boolean(s.raw(1))
     };
-    if (parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
+    if (<boolean>parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
       parsed.time = new Date(parsed.time.readUInt32LE(0)*1000);
     }
     events.fireVersion(parsed);
     return Promise.resolve(parsed)
+  }
+
+  handleAddr(payload: Buffer, events: Events): Promise<AddressEvent> {
+    const addrs: AddressEvent = {
+      addresses: this.parseAddrMessage(payload, events)
+    };
+    events.fireAddr(addrs);
+    return Promise.resolve(addrs);
+  }
+
+  handleGetHeaders(payload: Buffer, events: Events): Promise<any> {
+    events.fireGetHeaders(payload);
+    return Promise.resolve(payload);
+  }
+
+  handleHeaders(payload: Buffer, events: Events): Promise<any> {
+    events.fireHeaders(payload);
+    return Promise.resolve(payload);
   }
 
   handleInv(payload: Buffer, events: Events): void {
@@ -114,24 +158,6 @@ export class MessageHandlers {
       }
       payload = payload.slice(36);
     }
-  }
-
-  handleAddr(payload: Buffer, events: Events): Promise<AddressEvent> {
-    const addrs: AddressEvent = {
-      addresses: this.parseAddrMessage(payload, events)
-    };
-    events.fireAddr(addrs);
-    return Promise.resolve(addrs);
-  }
-
-  handleGetHeaders(payload: Buffer, events: Events): Promise<any> {
-    events.fireGetHeaders(payload);
-    return Promise.resolve(payload);
-  }
-
-  handleHeaders(payload: Buffer, events: Events): Promise<any> {
-    events.fireHeaders(payload);
-    return Promise.resolve(payload);
   }
 
   private parseNonce(payload: Buffer): Buffer {

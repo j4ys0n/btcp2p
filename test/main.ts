@@ -12,7 +12,7 @@ import {
 const unitTestOptions = {
   name: 'litecoin',
   peerMagic: 'fbc0b6db',
-  disableTransactions: true,
+  relayTransactions: false,
   host: 'localhost',
   port: 3003,
   listenPort: 3003,
@@ -23,7 +23,7 @@ const unitTestOptions = {
 const integrationTestOptions = {
   name: 'litecoin',
   peerMagic: 'fbc0b6db',
-  disableTransactions: true,
+  relayTransactions: false,
   host: '34.201.114.34',
   port: 9333,
   protocolVersion: 70015,
@@ -35,16 +35,6 @@ class BTCP2PTest extends BTCP2P {
   public serverEvents;
   public util;
   public message;
-
-  // public sendPing(events: Events, socket: net.Socket): void {
-  //   super.sendPing(events, socket);
-  // }
-  // public sendVersion(events: Events, socket: net.Socket): void {
-  //   super.sendVersion(events, socket);
-  // }
-  // public sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
-  //   super.sendMessage(command, payload, socket);
-  // }
 }
 
 describe('Unit tests', () => {
@@ -111,6 +101,7 @@ describe('Unit tests', () => {
     it('client should fire reject event when server sends reject message', (done) => {
       const msg = 'block';
       const ccode = 0x01;
+      const name = 'REJECT_MALFORMED';
       const reason = 'bad command - malformed'
       const extra = 'asdfghjkl';
 
@@ -118,6 +109,7 @@ describe('Unit tests', () => {
         btcp2p.clientEvents.clearReject();
         expect(rejected.message).to.be.equal(msg);
         expect(rejected.ccode).to.be.equal(ccode);
+        expect(rejected.name).to.be.equal(name);
         expect(rejected.reason).to.be.equal(reason);
         expect(rejected.extra).to.be.equal(extra);
         done();
@@ -151,6 +143,19 @@ describe('Unit tests', () => {
       btcp2p.message.sendPing(btcp2p.clientEvents, btcp2p.client);
     });
 
+    it('server should get address when client sends address', (done) => {
+      const ip = '192.0.2.51';
+      const port = unitTestOptions.port;
+      btcp2p.onServer('addr', (payload) => {
+        // console.log(payload);
+        const firstAddr = payload.addresses[0];
+        expect(firstAddr.host).to.be.equal(ip);
+        expect(firstAddr.port).to.be.equal(port);
+        done();
+      });
+      btcp2p.message.sendAddr(btcp2p.clientEvents, btcp2p.client, ip, port);
+    });
+
   })
 
   after(() => {
@@ -161,11 +166,10 @@ describe('Unit tests', () => {
 });
 
 describe('Integration Tests', () => {
-  let btcp2p: BTCP2P;
+  let btcp2p: BTCP2PTest;
   describe('functional methods', () => {
     it('should connect to litecoin, then disconnect', (done) => {
-      btcp2p = new BTCP2P(integrationTestOptions);
-
+      btcp2p = new BTCP2PTest(integrationTestOptions);
       btcp2p.onClient('connect', (e: ConnectEvent) => {
         btcp2p.client.end();
       });
@@ -175,13 +179,13 @@ describe('Integration Tests', () => {
     });
 
     // it('should connect to litecoin, get addresses then disconnect', (done) => {
-    //   btcp2p = new BTCP2P(integrationTestOptions);
+    //   btcp2p = new BTCP2PTest(integrationTestOptions);
     //
     //   btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
     //     console.log(e);
     //   });
     //   btcp2p.onClient('connect', (e: ConnectEvent) => {
-    //     btcp2p.getAddresses(btcp2p.client);
+    //     btcp2p.message.sendGetAddr(btcp2p.clientEvents, btcp2p.client);
     //   });
     //   btcp2p.onClient('addr', (e) => {
     //     btcp2p.client.end();

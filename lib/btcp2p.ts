@@ -31,9 +31,6 @@ export class BTCP2P {
   public onServer = this.serverEvents.on.bind(this.serverEvents);
   protected util: Utils = new Utils();
   protected message!: Message;
-  // bitcoin specific vars
-  private magic: Buffer;
-  private magicInt: number = 0;
 
   private verack = false;
 
@@ -51,7 +48,7 @@ export class BTCP2P {
    * @param options: StartOptions = {
    *  name: string,
    *  peerMagic: string,
-   *  disableTransactions: boolean,
+   *  relayTransactions: boolean,
    *  host: string,
    *  port: number,
    *  listenPort: number,
@@ -61,18 +58,11 @@ export class BTCP2P {
    */
 
   constructor(private options: StartOptions) {
-    this.magic = Buffer.from(options.peerMagic, 'hex');
-    try {
-      this.magicInt = this.magic.readUInt32LE(0);
-    } catch (e) {
-      this.clientEvents.fireError({message: 'read peer magic failed in constructor'});
-      return;
-    }
-    this.message = new Message(this.magic, this.magicInt, this.options);
-
-    // if (!options.disableTransactions) {
-    //   this.relayTransactions = Buffer.from([]);
-    // }
+    this.message = new Message({
+      magic: this.options.peerMagic,
+      protocolVersion: this.options.protocolVersion,
+      relayTransactions: this.options.relayTransactions
+    });
 
     this.clientEvents.onConnectionRejected(event => {
       this.clientEvents.fireError({message: 'connection rejected, maybe banned, or old protocol version'});
@@ -186,13 +176,13 @@ export class BTCP2P {
   }
 
   private defaultEventHandlers(events: Events, socket: net.Socket): void {
-    events.onVerack(event => {
+    events.onVerack(e => {
       if (!this.verack) {
         this.verack = true;
         events.fireConnect({});
       }
     });
-    events.onGetHeaders(payload => {
+    events.onGetHeaders((payload: Buffer) => {
       if (this.headers === undefined) {
         this.waitingForHeaders = true;
         this.message.sendGetHeaders(payload, events, socket);
@@ -200,7 +190,7 @@ export class BTCP2P {
         this.message.sendHeaders(this.headers, events, socket);
       }
     });
-    events.onHeaders(payload => {
+    events.onHeaders((payload: Buffer) => {
       if (this.waitingForHeaders) {
         this.headers = payload;
         this.waitingForHeaders = false;
