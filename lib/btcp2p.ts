@@ -1,9 +1,10 @@
 import * as net from 'net';
 import * as crypto from 'crypto';
-import { MessageParser } from 'crypto-binary';
+import { MessageParser, MessageBuilder } from 'crypto-binary';
 
 // class imports
 import { Events } from './events/events';
+import { RejectedEvent } from './interfaces/events.interface'
 import { Utils } from './util/general.util';
 
 // interface imports
@@ -42,7 +43,8 @@ const createNonce = () => {
 
 export class BTCP2P {
   public client!: net.Socket;
-  protected server!: net.Server;
+  private server!: net.Server;
+  public serverSocket!: net.Socket;
   private serverStarting: boolean = false;
   private serverStarted: boolean = false;
   protected clientEvents: Events = new Events();
@@ -158,6 +160,7 @@ export class BTCP2P {
     // start server and if necessary init connection
     if (this.options.listenPort !== undefined) {
       this.server = net.createServer((socket) => {
+        this.serverSocket = socket;
         this.setupMessageParser(socket, this.serverEvents);
       });
       if (
@@ -374,7 +377,42 @@ export class BTCP2P {
   }
 
   private handleReject(payload: Buffer, events: Events): void {
-    console.log(payload);
+    const p = new MessageParser(payload);
+    const messageLen = p.readInt8();
+    const message = p.raw(messageLen).toString();
+    const ccode = p.readInt8();
+    const reasonLen = p.readInt8();
+    const reason = p.raw(reasonLen).toString();
+    const extraLen = (p.buffer.length -1) - (p.pointer -1);
+    const extra = (extraLen > 0) ? p.raw(extraLen).toString() : '';
+
+    let rejected: RejectedEvent = {
+      message,
+      ccode,
+      reason,
+      extra
+    };
+    events.fireReject(rejected);
+  }
+
+  public sendReject(msg: string, ccode: number, reason: string, extra: string, socket: net.Socket): void {
+    const msgBytes = msg.length
+    const reasonBytes = reason.length;
+    const extraBytes = extra.length;
+    const len = 1 + msgBytes + 1 + 1 + reasonBytes + extraBytes;
+    const message = new MessageBuilder(len);
+    message.putInt8(msgBytes);
+    message.putString(msg);
+    message.putInt8(ccode);
+    message.putInt8(reasonBytes);
+    message.putString(reason);
+    message.putString(extra);
+
+    this.sendMessage(
+      this.commands.reject,
+      message.buffer,
+      socket
+    )
   }
 
   private getHost(buff: Buffer): {host: string; version: number} {
@@ -552,7 +590,7 @@ export class BTCP2P {
     }
   }
 
-  private sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
+  protected sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
     const message = Buffer.concat([
       this.magic,
       command,

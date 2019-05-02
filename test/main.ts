@@ -3,10 +3,13 @@ const expect = chai.expect;
 const should = chai.should();
 
 import * as net from 'net';
+import { MessageBuilder } from 'crypto-binary';
 
 import { BTCP2P } from '../lib/btcp2p';
 import { Events } from '../lib/events/events';
-import { ConnectEvent, DisconnectEvent } from '../lib/interfaces/events.interface'
+import {
+  ConnectEvent, DisconnectEvent, PeerMessageEvent, RejectedEvent
+} from '../lib/interfaces/events.interface'
 
 
 const unitTestOptions = {
@@ -41,7 +44,9 @@ class BTCP2PTest extends BTCP2P {
   public sendVersion(events: Events, socket: net.Socket): void {
     super.sendVersion(events, socket);
   }
-  public sendMessage
+  public sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
+    super.sendMessage(command, payload, socket);
+  }
 }
 
 describe('Unit tests', () => {
@@ -66,6 +71,31 @@ describe('Unit tests', () => {
   });
 
   describe('events', () => {
+    it('should throw error when trying to listen for non-existent event', (done) => {
+      btcp2p.onClient('error', (error) => {
+        expect(error.message).to.be.equal('badevent event does not exist');
+        done();
+      });
+      btcp2p.onClient('badevent', (response) => {
+        // should fire error
+      })
+    });
+    it('client should send event for sent_message when message sent (version)', (done) => {
+      btcp2p.onClient('sent_message', (msg) => {
+        btcp2p.clientEvents.clearSentMessage();
+        expect(msg.command).to.be.equal('version');
+        done();
+      });
+      btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+    });
+    it('server should send event for peer_message when message received (version)', (done) => {
+      btcp2p.onServer('peer_message', (msg) => {
+        btcp2p.serverEvents.clearPeerMessage();
+        expect(msg.command).to.be.equal(btcp2p.commands.version.toString());
+        done();
+      });
+      btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+    });
     it('server should get version when client sends version', (done) => {
       btcp2p.onServer('version', () => {
         btcp2p.serverEvents.clearVersion();
@@ -73,13 +103,29 @@ describe('Unit tests', () => {
       });
       btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
     });
-
     it('client should get verack when client sends version', (done) => {
       btcp2p.onClient('verack', () => {
         btcp2p.clientEvents.clearVerack();
         done();
       });
       btcp2p.sendVersion(btcp2p.clientEvents, btcp2p.client);
+    });
+    it('client should fire reject event when server sends reject message', (done) => {
+      const msg = 'block';
+      const ccode = 0x01;
+      const reason = 'bad command - malformed'
+      const extra = 'asdfghjkl';
+
+      btcp2p.onClient('reject', (rejected: RejectedEvent) => {
+        btcp2p.clientEvents.clearReject();
+        expect(rejected.message).to.be.equal(msg);
+        expect(rejected.ccode).to.be.equal(ccode);
+        expect(rejected.reason).to.be.equal(reason);
+        expect(rejected.extra).to.be.equal(extra);
+        done();
+      });
+
+      btcp2p.sendReject(msg, ccode, reason, extra, btcp2p.serverSocket);
     });
 
     it('server should get ping and client should get pong with matching nonce when client sends ping', (done) => {
@@ -130,19 +176,22 @@ describe('Integration Tests', () => {
       });
     });
 
-    it('should connect to litecoin, get addresses then disconnect', (done) => {
-      btcp2p = new BTCP2P(integrationTestOptions);
-
-      btcp2p.onClient('connect', (e: ConnectEvent) => {
-        btcp2p.getAddresses(btcp2p.client);
-      });
-      btcp2p.onClient('addr', (e) => {
-        btcp2p.client.end();
-      })
-      btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
-        done();
-      });
-    });
+    // it('should connect to litecoin, get addresses then disconnect', (done) => {
+    //   btcp2p = new BTCP2P(integrationTestOptions);
+    //
+    //   btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
+    //     console.log(e);
+    //   });
+    //   btcp2p.onClient('connect', (e: ConnectEvent) => {
+    //     btcp2p.getAddresses(btcp2p.client);
+    //   });
+    //   btcp2p.onClient('addr', (e) => {
+    //     btcp2p.client.end();
+    //   })
+    //   btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
+    //     done();
+    //   });
+    // });
   });
 
   after(() => {

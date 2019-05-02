@@ -30,3 +30,9 @@ export interface VersionEvent {
   height: number;
   relay: boolean;
 }
+export interface RejectedEvent {
+  message: string;
+  ccode: number;
+  reason: string;
+  extra: string;
+}

@@ -1,7 +1,7 @@
 import {
   ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
   SentMessageEvent, PeerMessageEvent, BlockNotifyEvent,
-  TxNotifyEvent, ErrorEvent, VersionEvent
+  TxNotifyEvent, ErrorEvent, VersionEvent, RejectedEvent
 } from '../interfaces/events.interface';
 
 
@@ -67,6 +67,17 @@ export class Events {
   }
   public clearError(): void {
     this.errorDispatcher.clear();
+  }
+  // error
+  private rejectDispatcher = new EventDispatcher<RejectedEvent>();
+  public onReject(handler: Handler<RejectedEvent>): void {
+    this.rejectDispatcher.register(handler);
+  }
+  public fireReject(event: RejectedEvent): void {
+    this.rejectDispatcher.fire(event);
+  }
+  public clearReject(): void {
+    this.rejectDispatcher.clear();
   }
   // message
   private sentMessageDispatcher = new EventDispatcher<SentMessageEvent>();
@@ -192,6 +203,9 @@ export class Events {
       case 'error':
         this.onError(handler);
         break;
+      case 'reject':
+        this.onReject(handler);
+        break;
       case 'block':
         this.onBlockNotify(handler);
         break;
@@ -208,7 +222,10 @@ export class Events {
         this.onSentMessage(handler);
         break;
       default:
-        console.error('no event named', event);
+        this.fireError({
+          message: event + ' event does not exist',
+          payload: new Error()
+        });
         break;
     }
   }
