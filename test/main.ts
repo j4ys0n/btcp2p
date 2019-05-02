@@ -12,8 +12,9 @@ const unitTestOptions = {
   name: 'litecoin',
   peerMagic: 'fbc0b6db',
   disableTransactions: true,
-  host: 'localhost',
-  port: 3003,
+  connectHost: 'localhost',
+  connectPort: 3003,
+  listenPort: 3003,
   protocolVersion: 70015,
   persist: false
 };
@@ -22,8 +23,8 @@ const integrationTestOptions = {
   name: 'litecoin',
   peerMagic: 'fbc0b6db',
   disableTransactions: true,
-  host: '34.201.114.34',
-  port: 9333,
+  connectHost: '34.201.114.34',
+  connectPort: 9333,
   protocolVersion: 70015,
   persist: false
 };
@@ -32,17 +33,11 @@ describe('Unit tests', () => {
   let btcp2p: BTCP2P;
   let server: net.Server;
   before((done) => {
-    server = net.createServer((socket: net.Socket) => {
-      socket.on('data', (data) => {
-        console.log('local:', data);
-      });
-    });
-    server.listen(unitTestOptions.port, () => {
-      console.log('  local server listening on', unitTestOptions.port);
-      btcp2p = new BTCP2P(unitTestOptions);
+    btcp2p = new BTCP2P(unitTestOptions);
+    btcp2p.startServer()
+    .then(() => {
       done();
-    });
-
+    })
   });
 
   describe('internal methods', () => {
@@ -59,7 +54,7 @@ describe('Unit tests', () => {
   after(() => {
     btcp2p.client.end();
     btcp2p.client.destroy();
-    server.close();
+    btcp2p.stopServer();
   });
 });
 

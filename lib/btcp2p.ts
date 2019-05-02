@@ -71,6 +71,9 @@ const createNonce = () => {
 
 export class BTCP2P {
   public client!: net.Socket;
+  private server!: net.Server;
+  private serverStarting: boolean = false;
+  private serverStarted: boolean = false;
   private util: Utils = new Utils();
   // bitcoin specific vars
   private magic: Buffer;
@@ -240,8 +243,8 @@ export class BTCP2P {
    *  name: string,
    *  peerMagic: string,
    *  disableTransactions: boolean,
-   *  host: string,
-   *  port: number,
+   *  connectHost: string,
+   *  connectPort: number,
    *  listenPort: number,
    *  protocolVersion: number,
    *  persist: boolean
@@ -282,28 +285,63 @@ export class BTCP2P {
         this.connect();
       }
     });
-    this.client = this.connect(this.options.host, this.options.port);
+
+    if (this.options.listenPort !== undefined) {
+      this.server = net.createServer((socket) => {
+        socket.on('data', (data) => {
+          console.log('local server:');
+          console.log(data);
+        });
+      });
+      if (
+        this.options.connectHost !== undefined &&
+        this.options.connectPort !== undefined
+      ) {
+        this.startServer()
+        .then(() => {
+          this.initConnection();
+        })
+      }
+    }
+
+    if (
+      this.options.connectHost !== undefined &&
+      this.options.connectPort !== undefined &&
+      this.options.listenPort === undefined
+    ) {
+      this.initConnection();
+    }
+  }
+
+  private initConnection(): void {
+    this.client = this.connect(this.options.connectHost, this.options.connectPort);
     this.setupMessageParser(this.client);
   }
 
   public startServer(): Promise<any> {
-    const server = net.createServer((socket) => {
-      socket.on('data', (data) => {
-        console.log('local server:');
-        console.log(data);
-      })
-    });
     return new Promise((resolve, reject) => {
-      server.listen(this.options.listenPort, () => {
+      if (!this.serverStarted && !this.serverStarting) {
+        this.serverStarting = true;
+        this.server.listen(this.options.listenPort, () => {
+          console.log('  local server listening on', this.options.listenPort);
+          this.serverStarting = false;
+          this.serverStarted = true;
+          resolve(true);
+        })
+      } else {
         resolve(true);
-      })
+      }
     })
+  }
+
+  public stopServer(): void {
+    this.server.close();
   }
 
   public connect(host: string = '', port: number = 0): net.Socket {
     const client = net.connect({
-      host: (host === '') ? this.options.host : host,
-      port: (port === 0) ? this.options.port : port
+      host: (host === '') ? this.options.connectHost as string : host,
+      port: (port === 0) ? this.options.connectPort as number : port
     }, () => {
       this.rejectedRetryAttempts = 0;
       this.sendVersion();
@@ -508,7 +546,7 @@ export class BTCP2P {
 
   private handleAddr(payload: Buffer): void {
     const addrs = this.parseAddrMessage(payload);
-    this.firePeerMessage({command: 'addr', payload: {host: this.options.host, port: this.options.port, addresses: addrs}});
+    this.firePeerMessage({command: 'addr', payload: {host: this.options.connectHost, port: this.options.connectPort, addresses: addrs}});
   }
 
   private parseAddrMessage(payload: Buffer): PeerAddress[] {
