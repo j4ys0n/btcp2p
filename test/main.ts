@@ -2,9 +2,11 @@ const chai = require('chai');
 const expect = chai.expect;
 const should = chai.should();
 
-const BTCP2P = require('../dist/btcp2p').BTCP2P;
+import { BTCP2P } from '../lib/btcp2p';
+import { ConnectEvent, DisconnectEvent } from '../lib/interfaces/events.interface'
 
-const net = require('net');
+// const net = require('net');
+import * as net from 'net'
 
 const unitTestOptions = {
   name: 'litecoin',
@@ -27,12 +29,12 @@ const integrationTestOptions = {
 };
 
 describe('Unit tests', () => {
-  let btcp2p;
-  let server;
+  let btcp2p: BTCP2P;
+  let server: net.Server;
   before((done) => {
-    server = net.createServer((socket) => {
+    server = net.createServer((socket: net.Socket) => {
       socket.on('data', (data) => {
-        // console.log('local:', data);
+        console.log('local:', data);
       });
     });
     server.listen(unitTestOptions.port, () => {
@@ -40,6 +42,7 @@ describe('Unit tests', () => {
       btcp2p = new BTCP2P(unitTestOptions);
       done();
     });
+
   });
 
   describe('internal methods', () => {
@@ -61,14 +64,14 @@ describe('Unit tests', () => {
 });
 
 describe('Integration Tests', () => {
-  let btcp2p;
+  let btcp2p: BTCP2P;
   describe('functional methods', () => {
     it('should connect to litecoin, then disconnect', (done) => {
       btcp2p = new BTCP2P(integrationTestOptions);
-      btcp2p.on('connect', (e) => {
+      btcp2p.on('connect', (e: ConnectEvent) => {
         btcp2p.client.end();
       });
-      btcp2p.on('disconnect', (e) => {
+      btcp2p.on('disconnect', (e: DisconnectEvent) => {
         done();
       });
     });

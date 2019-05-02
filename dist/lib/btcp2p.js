@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var net = require("net");
 var crypto = require("crypto");
-var cryptoBinary = require("crypto-binary");
+var crypto_binary_1 = require("crypto-binary");
 // class imports
 var general_util_1 = require("./util/general.util");
 // testing flag
@@ -15,7 +15,6 @@ var MINUTE = 60 * 1000;
 var CONNECTION_RETRY = 5 * MINUTE;
 var PING_INTERVAL = 5 * MINUTE;
 var IPV6_IPV4_PADDING = Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255]);
-var MessageParser = cryptoBinary.MessageParser;
 var EventDispatcher = /** @class */ (function () {
     function EventDispatcher() {
         this.handlers = [];
@@ -67,7 +66,7 @@ var BTCP2P = /** @class */ (function () {
      *  disableTransactions: boolean,
      *  host: string,
      *  port: number,
-     *  listenPort: number
+     *  listenPort: number,
      *  protocolVersion: number,
      *  persist: boolean
      * }
@@ -266,20 +265,6 @@ var BTCP2P = /** @class */ (function () {
                 break;
         }
     };
-    BTCP2P.prototype.startServer = function () {
-        var _this = this;
-        var server = net.createServer(function (socket) {
-            socket.on('data', function (data) {
-                console.log('local server:');
-                console.log(data);
-            });
-        });
-        return new Promise(function (resolve, reject) {
-            server.listen(_this.options.listenPort, function () {
-                resolve(true);
-            });
-        });
-    };
     BTCP2P.prototype.connect = function (host, port) {
         var _this = this;
         if (host === void 0) { host = ''; }
@@ -422,7 +407,7 @@ var BTCP2P = /** @class */ (function () {
         }
     };
     BTCP2P.prototype.handleVersion = function (payload) {
-        var s = new MessageParser(payload);
+        var s = new crypto_binary_1.MessageParser(payload);
         var parsed = {
             version: s.readUInt32LE(0),
             services: parseInt(s.raw(8).slice(0, 1).toString('hex'), 16),
@@ -492,11 +477,12 @@ var BTCP2P = /** @class */ (function () {
         this.firePeerMessage({ command: 'addr', payload: { host: this.options.host, port: this.options.port, addresses: addrs } });
     };
     BTCP2P.prototype.parseAddrMessage = function (payload) {
-        var s = new MessageParser(payload);
+        var s = new crypto_binary_1.MessageParser(payload);
         var addrs = [];
         var addrNum = s.readVarInt();
         for (var i = 0; i < addrNum; i++) {
-            addrs.push(this.getAddr(s.raw(30)));
+            var addr = this.getAddr(s.raw(30));
+            addrs.push(addr);
         }
         return addrs;
     };
@@ -512,16 +498,16 @@ var BTCP2P = /** @class */ (function () {
         this.fireSentMessage({ command: 'ping' });
     };
     BTCP2P.prototype.handlePing = function (payload) {
-        var nonce = null;
-        var sendBack = null;
+        var nonce = '';
+        var sendBack;
         if (payload.length) {
-            nonce = new MessageParser(payload).raw(8).toString('hex');
+            nonce = new crypto_binary_1.MessageParser(payload).raw(8).toString('hex');
             // nonce = payload.readUInt16BE(0);
             // nonce += payload.readUInt16BE(2);
             // nonce += payload.readUInt16BE(4);
             // nonce += payload.readUInt16BE(6);
         }
-        if (nonce) {
+        if (nonce !== '') {
             // sendBack = fixedLenStringBuffer(nonce, 8);
             sendBack = payload;
         }

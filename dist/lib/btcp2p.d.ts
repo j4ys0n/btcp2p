@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import * as net from 'net';
 import { StartOptions } from './interfaces/peer.interface';
 declare type Handler<E> = (event: E) => void;
@@ -83,13 +82,12 @@ export declare class BTCP2P {
      *  disableTransactions: boolean,
      *  host: string,
      *  port: number,
-     *  listenPort: number
+     *  listenPort: number,
      *  protocolVersion: number,
      *  persist: boolean
      * }
      */
     constructor(options: StartOptions);
-    startServer(): Promise<any>;
     connect(host?: string, port?: number): net.Socket;
     private sendVersion;
     private setupMessageParser;

@@ -1,12 +1,12 @@
 import * as net from 'net';
 import * as crypto from 'crypto';
-import * as cryptoBinary from 'crypto-binary';
+import { MessageParser } from 'crypto-binary';
 
 // class imports
 import { Utils } from './util/general.util';
 
 // interface imports
-import { PeerAddress } from './interfaces/peer.interface';
+import { StartOptions, PeerAddress } from './interfaces/peer.interface';
 import {
   ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
   SentMessageEvent, PeerMessageEvent, BlockNotifyEvent,
@@ -23,7 +23,6 @@ const MINUTE = 60 * 1000;
 const CONNECTION_RETRY = 5 * MINUTE;
 const PING_INTERVAL = 5 * MINUTE;
 const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
-const MessageParser = cryptoBinary.MessageParser;
 
 type Handler<E> = (event: E) => void;
 
@@ -67,7 +66,7 @@ const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, c
 
 // TODO create nonce for sending with ping
 const createNonce = () => {
-
+  return crypto.pseudoRandomBytes(8)
 }
 
 export class BTCP2P {
@@ -236,7 +235,20 @@ export class BTCP2P {
     }
   }
 
-  constructor(private options: any) {
+  /**
+   * @param options: StartOptions = {
+   *  name: string,
+   *  peerMagic: string,
+   *  disableTransactions: boolean,
+   *  host: string,
+   *  port: number,
+   *  listenPort: number,
+   *  protocolVersion: number,
+   *  persist: boolean
+   * }
+   */
+
+  constructor(private options: StartOptions) {
     this.magic = Buffer.from(options.peerMagic, 'hex');
     try {
       this.magicInt = this.magic.readUInt32LE(0);
@@ -313,7 +325,7 @@ export class BTCP2P {
       this.util.packInt64LE(Date.now() / 1000 | 0),
       this.emptyNetAddress,
       this.emptyNetAddress,
-      crypto.pseudoRandomBytes(8), //nonce, random unique ID
+      createNonce(), //nonce, random unique ID
       this.userAgent,
       this.blockStartHeight,
       this.relayTransactions
@@ -487,10 +499,11 @@ export class BTCP2P {
 
   private parseAddrMessage(payload: Buffer): PeerAddress[] {
     const s = new MessageParser(payload);
-    let addrs = [];
+    let addrs: Array<PeerAddress> = [];
     let addrNum = s.readVarInt();
     for (let i = 0; i < addrNum; i++) {
-      addrs.push(this.getAddr(s.raw(30)));
+      const addr: PeerAddress = this.getAddr(<Buffer>s.raw(30));
+      addrs.push(addr);
     }
     return addrs;
   }
@@ -508,8 +521,8 @@ export class BTCP2P {
   }
 
   private handlePing(payload: Buffer): void {
-    let nonce = null;
-    let sendBack = null;
+    let nonce: string = '';
+    let sendBack: Buffer;
     if (payload.length) {
       nonce = new MessageParser(payload).raw(8).toString('hex');
       // nonce = payload.readUInt16BE(0);
@@ -517,7 +530,7 @@ export class BTCP2P {
       // nonce += payload.readUInt16BE(4);
       // nonce += payload.readUInt16BE(6);
     }
-    if (nonce) {
+    if (nonce !== '') {
       // sendBack = fixedLenStringBuffer(nonce, 8);
       sendBack = payload;
     } else {
