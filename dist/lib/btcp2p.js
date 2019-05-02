@@ -265,6 +265,20 @@ var BTCP2P = /** @class */ (function () {
                 break;
         }
     };
+    BTCP2P.prototype.startServer = function () {
+        var _this = this;
+        var server = net.createServer(function (socket) {
+            socket.on('data', function (data) {
+                console.log('local server:');
+                console.log(data);
+            });
+        });
+        return new Promise(function (resolve, reject) {
+            server.listen(_this.options.listenPort, function () {
+                resolve(true);
+            });
+        });
+    };
     BTCP2P.prototype.connect = function (host, port) {
         var _this = this;
         if (host === void 0) { host = ''; }

@@ -286,6 +286,20 @@ export class BTCP2P {
     this.setupMessageParser(this.client);
   }
 
+  public startServer(): Promise<any> {
+    const server = net.createServer((socket) => {
+      socket.on('data', (data) => {
+        console.log('local server:');
+        console.log(data);
+      })
+    });
+    return new Promise((resolve, reject) => {
+      server.listen(this.options.listenPort, () => {
+        resolve(true);
+      })
+    })
+  }
+
   public connect(host: string = '', port: number = 0): net.Socket {
     const client = net.connect({
       host: (host === '') ? this.options.host : host,

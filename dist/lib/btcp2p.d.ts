@@ -88,6 +88,7 @@ export declare class BTCP2P {
      * }
      */
     constructor(options: StartOptions);
+    startServer(): Promise<any>;
     connect(host?: string, port?: number): net.Socket;
     private sendVersion;
     private setupMessageParser;
