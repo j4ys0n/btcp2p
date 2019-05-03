@@ -1,7 +1,8 @@
 import {
   ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
   SentMessageEvent, PeerMessageEvent, BlockNotifyEvent,
-  TxNotifyEvent, ErrorEvent, VersionEvent, RejectedEvent
+  TxNotifyEvent, ErrorEvent, VersionEvent, RejectedEvent,
+  AddressEvent
 } from '../interfaces/events.interface';
 
 
@@ -23,7 +24,8 @@ class EventDispatcher<E> {
 }
 
 export class Events {
-  constructor() {}
+  constructor(private server: boolean = false) {
+  }
   // connect
   private connectDispatcher = new EventDispatcher<ConnectEvent>();
   public onConnect(handler: Handler<ConnectEvent>): void {
@@ -168,15 +170,55 @@ export class Events {
     this.pongDispatcher.clear();
   }
   // addresses received
-  private addrDispatcher = new EventDispatcher<any>();
-  public onAddr(handler: Handler<any>): void {
+  private addrDispatcher = new EventDispatcher<AddressEvent>();
+  public onAddr(handler: Handler<AddressEvent>): void {
     this.addrDispatcher.register(handler);
   }
-  public fireAddr(event: any): void {
+  public fireAddr(event: AddressEvent): void {
     this.addrDispatcher.fire(event);
   }
   public clearAddr(): void {
     this.addrDispatcher.clear();
+  }
+  // headers requested (getheaders)
+  private getHeadersDispatcher = new EventDispatcher<any>();
+  public onGetHeaders(handler: Handler<any>): void {
+    this.getHeadersDispatcher.register(handler);
+  }
+  public fireGetHeaders(event: any): void {
+    this.getHeadersDispatcher.fire(event);
+  }
+  public clearGetHeaders(): void {
+    this.getHeadersDispatcher.clear();
+  }
+  // headers send (headers)
+  private headersDispatcher = new EventDispatcher<any>();
+  public onHeaders(handler: Handler<any>): void {
+    this.headersDispatcher.register(handler);
+  }
+  public fireHeaders(event: any): void {
+    this.headersDispatcher.fire(event);
+  }
+  public clearHeaders(): void {
+    this.headersDispatcher.clear();
+  }
+
+  // server only events
+  private serverStartDispatcher = new EventDispatcher<boolean>();
+  public onServerStart(handler: Handler<boolean>): void {
+    if (this.server) {
+      this.serverStartDispatcher.register(handler);
+    }
+  }
+  public fireServerStart(event: boolean): void {
+    if (this.server) {
+      this.serverStartDispatcher.fire(event);
+    }
+  }
+  public clearServerStart(): void {
+    if (this.server) {
+      this.serverStartDispatcher.clear();
+    }
   }
 
   // event handlers
@@ -214,6 +256,9 @@ export class Events {
         break;
       case 'addr':
         this.onAddr(handler);
+        break;
+      case 'getheaders':
+        this.onGetHeaders(handler);
         break;
       case 'peer_message':
         this.onPeerMessage(handler);
