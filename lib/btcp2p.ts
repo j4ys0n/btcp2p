@@ -36,6 +36,7 @@ export class BTCP2P {
   protected util: Utils = new Utils();
   protected message!: Message;
 
+  private pings: any;
   // if the remote peer acknowledges the version, it can be considered connected
   private clientVerack = false;
   private serverVerack = false;
@@ -205,7 +206,8 @@ export class BTCP2P {
   }
 
   private startPings(events: Events, socket: net.Socket): void {
-    setInterval(() => {
+    clearInterval(this.pings);
+    this.pings = setInterval(() => {
       this.message.sendPing(events, socket);
     }, PING_INTERVAL);
   }
