@@ -19,11 +19,12 @@ export declare class BTCP2P {
     protected util: Utils;
     protected message: Message;
     private pings;
-    private clientVerack;
-    private serverVerack;
-    private rejectedRetryMax;
-    private rejectedRetryAttempts;
-    private rejectedRetryPause;
+    private pingInterval;
+    private clientConnected;
+    private serverConnected;
+    private clientEventHandlersAdded;
+    protected rejectedRetryPause: number;
+    protected errorRetryPause: number;
     private headers;
     private waitingForHeaders;
     private validConnectionConfig;
@@ -44,7 +45,10 @@ export declare class BTCP2P {
     startServer(): Promise<any>;
     stopServer(): void;
     private initConnection;
+    restartClient(wait: number): Promise<boolean>;
+    private initRestartClient;
     private connect;
-    private defaultEventHandlers;
+    private clientEventHandlers;
+    private serverEventHandlers;
     private startPings;
 }

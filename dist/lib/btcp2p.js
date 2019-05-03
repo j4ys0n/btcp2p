@@ -12,8 +12,6 @@ var ENVS = {
 };
 // general consts
 var MINUTE = 60 * 1000;
-var CONNECTION_RETRY = 5 * MINUTE;
-var PING_INTERVAL = 5 * MINUTE;
 var BTCP2P = /** @class */ (function () {
     /**
      * @param options: StartOptions = {
@@ -33,19 +31,22 @@ var BTCP2P = /** @class */ (function () {
         this.options = options;
         this.serverStarting = false;
         this.serverStarted = false;
-        // separate event handlers for client and server
+        // separate event handlers for client and server (internal & external)
         this.clientEvents = new events_1.Events();
+        // protected internalClientEvents: Events = new Events();
         this.serverEvents = new events_1.Events(true);
+        // protected internalServerEvents: Events = new Events(true);
         // expose events to listen to for client and server
         this.onClient = this.clientEvents.on.bind(this.clientEvents);
         this.onServer = this.serverEvents.on.bind(this.serverEvents);
         this.util = new general_util_1.Utils();
-        // if the remote peer acknowledges the version, it can be considered connected
-        this.clientVerack = false;
-        this.serverVerack = false;
-        this.rejectedRetryMax = 3;
-        this.rejectedRetryAttempts = 0;
-        this.rejectedRetryPause = 2000;
+        this.pingInterval = 5 * MINUTE;
+        // if the remote peer acknowledges the version (verack), it can be considered connected
+        this.clientConnected = false;
+        this.serverConnected = false;
+        this.clientEventHandlersAdded = false;
+        this.rejectedRetryPause = MINUTE; // on disctonnect/reject
+        this.errorRetryPause = 3 * MINUTE; // on node crash/restart
         this.waitingForHeaders = false;
         this.validConnectionConfig = true;
         //
@@ -62,31 +63,17 @@ var BTCP2P = /** @class */ (function () {
         }
         this.clientEvents.onConnectionRejected(function (event) {
             _this.clientEvents.fireError({ message: 'connection rejected, maybe banned, or old protocol version' });
-            if (_this.options.persist) {
-                // pause for 2 seconds, try again.
-                if (_this.rejectedRetryAttempts < _this.rejectedRetryMax) {
-                    _this.rejectedRetryAttempts++;
-                    setTimeout(function () {
-                        _this.connect();
-                    }, _this.rejectedRetryPause);
-                }
-                else {
-                    _this.clientEvents.fireError({ message: 'max rejected retries hit (' + _this.rejectedRetryMax + ')' });
-                }
-            }
+            _this.restartClient(_this.rejectedRetryPause);
         });
         this.clientEvents.onDisconnect(function (event) {
-            _this.clientVerack = false;
-            if (_this.options.persist) {
-                _this.connect();
-            }
+            _this.restartClient(_this.rejectedRetryPause);
         });
-        // start server and if necessary init connection
+        // start server if necessary and init connection
         if (this.options.startServer) {
             this.server = net.createServer(function (socket) {
                 _this.serverSocket = socket;
                 _this.message.setupMessageParser(_this.serverEvents, socket);
-                _this.defaultEventHandlers(_this.serverEvents, socket, 'serverVerack');
+                _this.serverEventHandlers(_this.serverEvents, socket);
             });
             this.startServer()
                 .then(function () {
@@ -123,7 +110,30 @@ var BTCP2P = /** @class */ (function () {
     BTCP2P.prototype.initConnection = function () {
         this.client = this.connect(this.options.host, this.options.port);
         this.message.setupMessageParser(this.clientEvents, this.client);
-        this.defaultEventHandlers(this.clientEvents, this.client, 'clientVerack');
+        if (!this.clientEventHandlersAdded) {
+            this.clientEventHandlers(this.clientEvents, this.client);
+        }
+    };
+    BTCP2P.prototype.restartClient = function (wait) {
+        if (this.options.persist && !this.clientConnected) {
+            return this.initRestartClient(wait);
+        }
+        else {
+            return Promise.resolve(false);
+        }
+    };
+    BTCP2P.prototype.initRestartClient = function (wait) {
+        var _this = this;
+        this.clientConnected = false;
+        this.client.end();
+        this.client.destroy();
+        clearInterval(this.pings);
+        return new Promise(function (resolve, reject) {
+            setTimeout(function () {
+                _this.initConnection();
+                resolve(true);
+            }, wait);
+        });
     };
     // client only
     BTCP2P.prototype.connect = function (host, port) {
@@ -134,13 +144,12 @@ var BTCP2P = /** @class */ (function () {
             host: (host === '') ? this.options.host : host,
             port: (port === 0) ? this.options.port : port
         }, function () {
-            _this.rejectedRetryAttempts = 0;
             _this.message.sendVersion(_this.clientEvents, client);
             _this.startPings(_this.clientEvents, client);
         });
         client.on('close', function () {
-            if (_this.clientVerack) {
-                _this.clientVerack = false;
+            if (_this.clientConnected) {
+                _this.clientConnected = false;
                 _this.clientEvents.fireDisconnect({});
             }
             else if (_this.validConnectionConfig) {
@@ -154,19 +163,44 @@ var BTCP2P = /** @class */ (function () {
             else {
                 _this.clientEvents.fireError({ message: 'socket error' });
             }
-            if (_this.options.persist) {
-                setTimeout(function () {
-                    _this.connect();
-                }, CONNECTION_RETRY);
-            }
+            _this.restartClient(_this.errorRetryPause);
         });
         return client;
     };
-    BTCP2P.prototype.defaultEventHandlers = function (events, socket, verack) {
+    BTCP2P.prototype.clientEventHandlers = function (events, socket) {
         var _this = this;
         events.onVerack(function (e) {
-            if (!_this[verack]) {
-                _this[verack] = true;
+            if (!_this.clientConnected) {
+                _this.clientConnected = true;
+                events.fireConnect({});
+            }
+        });
+        events.onGetHeaders(function (payload) {
+            if (!_this.headers) {
+                _this.waitingForHeaders = true;
+                _this.message.sendGetHeaders(payload.raw, events, socket);
+            }
+            else {
+                _this.message.sendHeaders(_this.headers, events, socket);
+            }
+        });
+        events.onHeaders(function (payload) {
+            if (_this.waitingForHeaders) {
+                _this.headers = payload.raw;
+                _this.waitingForHeaders = false;
+                _this.message.sendHeaders(payload.raw, events, socket);
+            }
+            else {
+                _this.headers = payload.raw;
+            }
+        });
+        this.clientEventHandlersAdded = true;
+    };
+    BTCP2P.prototype.serverEventHandlers = function (events, socket) {
+        var _this = this;
+        events.onVerack(function (e) {
+            if (!_this.serverConnected) {
+                _this.serverConnected = true;
                 events.fireConnect({});
             }
         });
@@ -195,7 +229,7 @@ var BTCP2P = /** @class */ (function () {
         clearInterval(this.pings);
         this.pings = setInterval(function () {
             _this.message.sendPing(events, socket);
-        }, PING_INTERVAL);
+        }, this.pingInterval);
     };
     return BTCP2P;
 }());
