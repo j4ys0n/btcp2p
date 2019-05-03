@@ -1,7 +1,8 @@
 import { MessageParser } from 'crypto-binary';
 
+import { Utils } from '../util/general.util';
 import { Events } from '../events/events';
-import { RejectedEvent, AddressEvent } from '../interfaces/events.interface';
+import { RejectedEvent, AddressEvent, HeadersEvent } from '../interfaces/events.interface';
 import { PeerAddress } from '../interfaces/peer.interface';
 
 export interface Nonce {
@@ -43,7 +44,7 @@ export class MessageHandlers {
     43: 'REJECT_CHECKPOINT'
   }
 
-  constructor() {}
+  constructor(private util: Utils) {}
 
   handlePing(payload: Buffer, events: Events): Promise<Nonce> {
     let nonce: Buffer = this.parseNonce(payload);
@@ -83,7 +84,7 @@ export class MessageHandlers {
     const s = new MessageParser(payload);
     // https://en.bitcoin.it/wiki/Protocol_documentation#version
     let parsed: Version = {
-      version: s.readUInt32LE(0),
+      version: s.readUInt32LE(),
       services: parseInt(s.raw(8).slice(0,1).toString('hex'), 16),
       time: s.raw(8),
       addr_recv: s.raw(26).toString('hex'),
@@ -108,14 +109,67 @@ export class MessageHandlers {
     return Promise.resolve(addrs);
   }
 
-  handleGetHeaders(payload: Buffer, events: Events): Promise<any> {
-    events.fireGetHeaders(payload);
-    return Promise.resolve(payload);
+  parseHashes(hashLen: number, mParser: any): Array<string> {
+    let hashes: Array<string> = [];
+    const len = mParser.buffer.length - mParser.pointer;
+    const stopHash = ((len: number, h: string = ''): string => {
+      while (len--) { h += '00' }
+      return h;
+    })(hashLen);
+    let cursor = 0;
+
+    for (cursor; cursor < len; cursor += hashLen){
+      const hash = mParser.raw(hashLen).reverse().toString('hex')
+      if (hash !== stopHash) {
+        hashes.push(hash);
+      }
+    }
+    return hashes;
   }
 
-  handleHeaders(payload: Buffer, events: Events): Promise<any> {
-    events.fireHeaders(payload);
-    return Promise.resolve(payload);
+  handleGetHeaders(payload: Buffer, events: Events): Promise<HeadersEvent> {
+    const p = new MessageParser(payload);
+    const version = p.readUInt32LE();
+    // const hashCount = p.raw(1).toString('hex');
+    const hashCount = this.util.getCompactSize(p);
+    const hashes = this.parseHashes(32, p);
+    const parsed = {
+      version,
+      hashCount,
+      hashes
+    }
+    // console.log(parsed);
+    events.fireGetHeaders({raw: payload, parsed: parsed});
+    return Promise.resolve({raw: payload, parsed: parsed});
+  }
+
+  parseHeaders(count: number, mParser: any): Array<any> {
+    const headers: Array<any> = [];
+    for (let i = 0; i < count; i++) {
+      const header = {
+        version: mParser.readUInt32LE(),
+        prev_block: mParser.raw(32).reverse().toString('hex'),
+        merkle_root: mParser.raw(32).reverse().toString('hex'),
+        timestamp: new Date(mParser.readUInt32LE(0)*1000),
+        bits: mParser.readUInt32LE(),
+        nonce: mParser.readUInt32LE()
+      }
+      headers.push(header);
+    }
+    return headers;
+  }
+
+  handleHeaders(payload: Buffer, events: Events): Promise<HeadersEvent> {
+    const p = new MessageParser(payload);
+    const hashCount = this.util.getCompactSize(p);
+    const hashes = this.parseHeaders(hashCount, p);
+    const parsed = {
+      hashCount,
+      hashes
+    }
+    // console.log(parsed);
+    events.fireHeaders({raw: payload, parsed: parsed});
+    return Promise.resolve({raw: payload, parsed: parsed});
   }
 
   handleInv(payload: Buffer, events: Events): void {
@@ -165,6 +219,7 @@ export class MessageHandlers {
     if (payload.length) {
       nonce = new MessageParser(payload).raw(8)
     } else {
+      /* istanbul ignore next */
       nonce = Buffer.from([]);
     }
     return nonce;
@@ -210,6 +265,7 @@ export class MessageHandlers {
       addr.ipVersion = host.version;
       addr.port = buff.readUInt16BE(28);
     } else {
+      /* istanbul ignore next */
       events.fireError({message: 'address field length not 30', payload: buff});
     }
     return addr;

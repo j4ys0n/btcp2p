@@ -40,3 +40,7 @@ export interface RejectedEvent {
 export interface AddressEvent {
   addresses: Array<any>
 }
+export interface HeadersEvent {
+  raw: Buffer;
+  parsed: any;
+}

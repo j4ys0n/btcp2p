@@ -36,7 +36,7 @@ const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
 
 export class Message {
   protected util: Utils = new Utils();
-  protected handlers: MessageHandlers = new MessageHandlers();
+  protected handlers: MessageHandlers = new MessageHandlers(this.util);
 
   private magic!: Buffer;
   private magicInt: number = 0;

@@ -1,5 +1,4 @@
 import * as net from 'net';
-import * as crypto from 'crypto';
 
 // class imports
 import { Events } from './events/events';
@@ -8,6 +7,7 @@ import { Message } from './message/message';
 
 // interface imports
 import { StartOptions } from './interfaces/peer.interface';
+import { HeadersEvent } from './interfaces/events.interface';
 
 // testing flag
 const ENV = process.env.NODE_ENV;
@@ -25,14 +25,20 @@ export class BTCP2P {
   public serverSocket!: net.Socket;
   private serverStarting: boolean = false;
   private serverStarted: boolean = false;
+  private serverPort!: number;
+  // separate event handlers for client and server
   protected clientEvents: Events = new Events();
-  protected serverEvents: Events = new Events();
+  protected serverEvents: Events = new Events(true);
+  // expose events to listen to for client and server
   public onClient = this.clientEvents.on.bind(this.clientEvents);
   public onServer = this.serverEvents.on.bind(this.serverEvents);
+
   protected util: Utils = new Utils();
   protected message!: Message;
 
-  private verack = false;
+  // if the remote peer acknowledges the version, it can be considered connected
+  private clientVerack = false;
+  private serverVerack = false;
 
   private rejectedRetryMax = 3;
   private rejectedRetryAttempts = 0;
@@ -41,7 +47,6 @@ export class BTCP2P {
   private headers!: Buffer;
   private waitingForHeaders = false;
 
-  //generalized vars
   private validConnectionConfig = true;
 
   /**
@@ -51,18 +56,26 @@ export class BTCP2P {
    *  relayTransactions: boolean,
    *  host: string,
    *  port: number,
-   *  listenPort: number,
+   *  serverPort: number,
+   *  startServer: boolean,
    *  protocolVersion: number,
    *  persist: boolean
    * }
    */
 
   constructor(private options: StartOptions) {
+    //
     this.message = new Message({
       magic: this.options.peerMagic,
       protocolVersion: this.options.protocolVersion,
       relayTransactions: this.options.relayTransactions
     });
+
+    if (!!this.options.serverPort) {
+      this.serverPort = this.options.serverPort;
+    } else {
+      this.serverPort = this.options.port;
+    }
 
     this.clientEvents.onConnectionRejected(event => {
       this.clientEvents.fireError({message: 'connection rejected, maybe banned, or old protocol version'});
@@ -80,55 +93,45 @@ export class BTCP2P {
     });
 
     this.clientEvents.onDisconnect(event => {
-      this.verack = false;
+      this.clientVerack = false;
       if (this.options.persist) {
         this.connect();
       }
     });
 
     // start server and if necessary init connection
-    if (this.options.listenPort !== undefined) {
+    if (this.options.startServer) {
       this.server = net.createServer((socket) => {
         this.serverSocket = socket;
         this.message.setupMessageParser(this.serverEvents, socket);
-        this.defaultEventHandlers(this.serverEvents, socket)
+        this.defaultEventHandlers(this.serverEvents, socket, 'serverVerack')
       });
-      if (
-        this.options.host !== undefined &&
-        this.options.port !== undefined
-      ) {
-        this.startServer()
-        .then(() => {
-          this.initConnection();
-        })
-      }
-    }
-
-    // if no server to start, just init connection
-    if (
-      this.options.host !== undefined &&
-      this.options.port !== undefined &&
-      this.options.listenPort === undefined
-    ) {
+      this.startServer()
+      .then(() => {
+        this.serverEvents.fireServerStart(true);
+        this.initConnection();
+      });
+    } else {
+      // if no server to start, just init connection
       this.initConnection();
     }
   }
 
   public startServer(): Promise<any> {
-    // not started buy default
+    // not started by default unless specified
     return new Promise((resolve, reject) => {
       if (!this.serverStarted && !this.serverStarting) {
         this.serverStarting = true;
-        this.server.listen(this.options.listenPort, () => {
-          console.log('  local server listening on', this.options.listenPort);
+        this.server.listen(this.serverPort, () => {
+          console.log('  local server listening on', this.serverPort);
           this.serverStarting = false;
           this.serverStarted = true;
           resolve(true);
         })
       } else {
-        resolve(true);
+        reject('server is either starting up or already started');
       }
-    })
+    });
   }
 
   public stopServer(): void {
@@ -138,7 +141,7 @@ export class BTCP2P {
   private initConnection(): void {
     this.client = this.connect(this.options.host, this.options.port);
     this.message.setupMessageParser(this.clientEvents, this.client);
-    this.defaultEventHandlers(this.clientEvents, this.client);
+    this.defaultEventHandlers(this.clientEvents, this.client, 'clientVerack');
   }
 
   // client only
@@ -152,8 +155,8 @@ export class BTCP2P {
       this.startPings(this.clientEvents, client);
     });
     client.on('close', () => {
-      if (this.verack) {
-        this.verack = false;
+      if (this.clientVerack) {
+        this.clientVerack = false;
         this.clientEvents.fireDisconnect({});
       } else if (this.validConnectionConfig) {
         this.clientEvents.fireConnectionRejected({});
@@ -175,28 +178,28 @@ export class BTCP2P {
     return client;
   }
 
-  private defaultEventHandlers(events: Events, socket: net.Socket): void {
+  private defaultEventHandlers(events: Events, socket: net.Socket, verack: string): void {
     events.onVerack(e => {
-      if (!this.verack) {
-        this.verack = true;
+      if (!this[verack]) {
+        this[verack] = true;
         events.fireConnect({});
       }
     });
-    events.onGetHeaders((payload: Buffer) => {
-      if (this.headers === undefined) {
+    events.onGetHeaders((payload: HeadersEvent) => {
+      if (!this.headers) {
         this.waitingForHeaders = true;
-        this.message.sendGetHeaders(payload, events, socket);
+        this.message.sendGetHeaders(payload.raw, events, socket);
       } else {
         this.message.sendHeaders(this.headers, events, socket);
       }
     });
-    events.onHeaders((payload: Buffer) => {
+    events.onHeaders((payload: HeadersEvent) => {
       if (this.waitingForHeaders) {
-        this.headers = payload;
+        this.headers = payload.raw;
         this.waitingForHeaders = false;
-        this.message.sendHeaders(payload, events, socket);
+        this.message.sendHeaders(payload.raw, events, socket);
       } else {
-        this.headers = payload;
+        this.headers = payload.raw;
       }
     });
   }

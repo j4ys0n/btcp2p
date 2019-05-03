@@ -24,7 +24,8 @@ class EventDispatcher<E> {
 }
 
 export class Events {
-  constructor() {}
+  constructor(private server: boolean = false) {
+  }
   // connect
   private connectDispatcher = new EventDispatcher<ConnectEvent>();
   public onConnect(handler: Handler<ConnectEvent>): void {
@@ -200,6 +201,24 @@ export class Events {
   }
   public clearHeaders(): void {
     this.headersDispatcher.clear();
+  }
+
+  // server only events
+  private serverStartDispatcher = new EventDispatcher<boolean>();
+  public onServerStart(handler: Handler<boolean>): void {
+    if (this.server) {
+      this.serverStartDispatcher.register(handler);
+    }
+  }
+  public fireServerStart(event: boolean): void {
+    if (this.server) {
+      this.serverStartDispatcher.fire(event);
+    }
+  }
+  public clearServerStart(): void {
+    if (this.server) {
+      this.serverStartDispatcher.clear();
+    }
   }
 
   // event handlers

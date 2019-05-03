@@ -3,7 +3,6 @@ const expect = chai.expect;
 const should = chai.should();
 
 import { BTCP2P } from '../lib/btcp2p';
-import { Events } from '../lib/events/events';
 import {
   ConnectEvent, DisconnectEvent, PeerMessageEvent, RejectedEvent
 } from '../lib/interfaces/events.interface'
@@ -15,7 +14,8 @@ const unitTestOptions = {
   relayTransactions: false,
   host: 'localhost',
   port: 3003,
-  listenPort: 3003,
+  serverPort: 3003,
+  startServer: true,
   protocolVersion: 70015,
   persist: false
 };
@@ -26,6 +26,7 @@ const integrationTestOptions = {
   relayTransactions: false,
   host: '34.201.114.34',
   port: 9333,
+  startServer: false,
   protocolVersion: 70015,
   persist: false
 };
@@ -41,8 +42,8 @@ describe('Unit tests', () => {
   let btcp2p: BTCP2PTest;
   before((done) => {
     btcp2p = new BTCP2PTest(unitTestOptions);
-    btcp2p.startServer()
-    .then(() => {
+    btcp2p.serverEvents.onServerStart(() => {
+      btcp2p.serverEvents.clearServerStart();
       done();
     })
   });
@@ -147,6 +148,7 @@ describe('Unit tests', () => {
       const ip = '192.0.2.51';
       const port = unitTestOptions.port;
       btcp2p.onServer('addr', (payload) => {
+        btcp2p.serverEvents.clearAddr();
         // console.log(payload);
         const firstAddr = payload.addresses[0];
         expect(firstAddr.host).to.be.equal(ip);
@@ -167,34 +169,44 @@ describe('Unit tests', () => {
 
 describe('Integration Tests', () => {
   let btcp2p: BTCP2PTest;
-  describe('functional methods', () => {
-    it('should connect to litecoin, then disconnect', (done) => {
-      btcp2p = new BTCP2PTest(integrationTestOptions);
-      btcp2p.onClient('connect', (e: ConnectEvent) => {
-        btcp2p.client.end();
-      });
-      btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
-        done();
-      });
-    });
+  // before((done) => {
+  //   btcp2p = new BTCP2PTest(integrationTestOptions);
+  //   done();
+  // })
 
-    // it('should connect to litecoin, get addresses then disconnect', (done) => {
-    //   btcp2p = new BTCP2PTest(integrationTestOptions);
-    //
-    //   btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
-    //     console.log(e);
-    //   });
-    //   btcp2p.onClient('connect', (e: ConnectEvent) => {
-    //     btcp2p.message.sendGetAddr(btcp2p.clientEvents, btcp2p.client);
-    //   });
-    //   btcp2p.onClient('addr', (e) => {
-    //     btcp2p.client.end();
-    //   })
-    //   btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
-    //     done();
-    //   });
-    // });
+  it('should connect to litecoin, wait 2 seconds, then disconnect', (done) => {
+    btcp2p = new BTCP2PTest(integrationTestOptions);
+    btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
+      // console.log(e);
+    });
+    btcp2p.onClient('connect', (e: ConnectEvent) => {
+      btcp2p.clientEvents.clearConnect();
+      setTimeout(() => {
+        btcp2p.client.end();
+      }, 2000);
+    });
+    btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
+      btcp2p.clientEvents.clearDisconnect();
+      done();
+    });
   });
+
+  // it('should connect to litecoin, get addresses then disconnect', (done) => {
+  //   btcp2p = new BTCP2PTest(integrationTestOptions);
+  //
+  //   btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
+  //     console.log(e);
+  //   });
+  //   btcp2p.onClient('connect', (e: ConnectEvent) => {
+  //     btcp2p.message.sendGetAddr(btcp2p.clientEvents, btcp2p.client);
+  //   });
+  //   btcp2p.onClient('addr', (e) => {
+  //     btcp2p.client.end();
+  //   })
+  //   btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
+  //     done();
+  //   });
+  // });
 
   after(() => {
     btcp2p.client.destroy();

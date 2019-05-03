@@ -71,4 +71,15 @@ export class Utils {
   public commandStringBuffer(s: string): Buffer {
     return this.fixedLenStringBuffer(s, 12);
   }
+
+  // mp needs to be MessageParser, can't use as a type for some reason
+  public getCompactSize(mp: any): number {
+    let compactSize = mp.raw(1);
+    if (compactSize >= 0xfd) {
+      compactSize = Buffer.concat([
+        compactSize, mp.raw(1)
+      ])
+    }
+    return parseInt(compactSize.toString('hex'), 16);
+  }
 }
