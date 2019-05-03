@@ -73,4 +73,5 @@ export declare class Events {
     fireServerStart(event: boolean): void;
     clearServerStart(): void;
     on(event: string, handler: Handler<any>): void;
+    clearAllListeners(): void;
 }
