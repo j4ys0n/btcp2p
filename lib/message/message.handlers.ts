@@ -140,17 +140,22 @@ export class MessageHandlers {
     return Promise.resolve({raw: payload, parsed: parsed});
   }
 
+  parseHeader(mParser: any): any {
+    const header = {
+      version: mParser.readUInt32LE(),
+      hash: mParser.raw(32).reverse().toString('hex'),
+      merkle_root: mParser.raw(32).reverse().toString('hex'),
+      timestamp: new Date(mParser.readUInt32LE()*1000),
+      bits: mParser.readUInt32LE(),
+      nonce: mParser.readUInt32LE()
+    }
+    return header;
+  }
+
   parseHeaders(count: number, mParser: any): Array<any> {
     const headers: Array<any> = [];
     for (let i = 0; i < count; i++) {
-      const header = {
-        version: mParser.readUInt32LE(),
-        prev_block: mParser.raw(32).reverse().toString('hex'),
-        merkle_root: mParser.raw(32).reverse().toString('hex'),
-        timestamp: new Date(mParser.readUInt32LE(0)*1000),
-        bits: mParser.readUInt32LE(),
-        nonce: mParser.readUInt32LE()
-      }
+      const header = this.parseHeader(mParser);
       headers.push(header);
     }
     return headers;
@@ -159,6 +164,7 @@ export class MessageHandlers {
   handleHeaders(payload: Buffer, events: Events): Promise<HeadersEvent> {
     const p = new MessageParser(payload);
     const hashCount = this.util.getCompactSize(p);
+    console.log('headers', hashCount)
     const hashes = this.parseHeaders(hashCount, p);
     const parsed = {
       hashCount,
@@ -167,6 +173,70 @@ export class MessageHandlers {
     // console.log(parsed);
     events.fireHeaders({raw: payload, parsed: parsed});
     return Promise.resolve({raw: payload, parsed: parsed});
+  }
+
+  // getWitnessFlag(mParser: any): boolean {
+  //   const flag = mParser.raw(2).toString('hex');
+  //   if (flag === '0001') {
+  //     return true;
+  //   }
+  //   mParser.incrPointer(-2);
+  //   return false;
+  // }
+  //
+  // parseTxIn(count: number, mParser: any): Array<any> {
+  //   const vins: Array<any> = [];
+  //   for (let i = 0; i < count; i++) {
+  //     const hash = mParser.raw(32).toString('hex');
+  //     const index = mParser.readUInt32LE();
+  //     const scriptLen = this.util.getCompactSize(mParser);
+  //     const vin = {
+  //       hash: hash,
+  //       index: index,
+  //       script: mParser.raw(scriptLen),
+  //       sequence: mParser.readUInt32LE()
+  //     }
+  //     vins.push(vin);
+  //   }
+  //   return vins;
+  // }
+  //
+  // parseTxes(mParser: any): any {
+  //   const hashCount = this.util.getCompactSize(mParser);
+  //   for (let i = 0; i < hashCount; i++) {
+  //     const version = mParser.readUInt32LE()
+  //     const witnessFlag = this.getWitnessFlag(mParser);
+  //     const txInCount = this.util.getCompactSize(mParser);
+  //     const tx = {
+  //       version: version,
+  //       witnessFlag: witnessFlag,
+  //       vin: this.parseTxIn(txInCount, mParser)
+  //     }
+  //   }
+  // }
+
+  // parseTxHashes(mParser: any): Array<string> {
+  //   const txes: Array<string> = [];
+  //   const hashCount = this.util.getCompactSize(mParser);
+  //   for (let i = 0; i < hashCount; i++) {
+  //     const hash = mParser.raw(32).reverse().toString('hex');
+  //     txes.push(hash);
+  //   }
+  //   return txes;
+  // }
+
+  handleBlock(payload: Buffer, events: Events): void {
+    // let block = payload.slice(4, 36).reverse().toString('hex');
+    const p = new MessageParser(payload);
+    // const header = this.parseHeader(p);
+    const header = {
+      version: p.readUInt32LE(),
+      hash: p.raw(32).reverse().toString('hex')
+    }
+    // const hashCount = this.util.getCompactSize(p);
+    // const txes = this.parseTxHashes(p);
+    // const block = {...header, ...{count: hashCount}}
+    events.fireBlockNotify(header);
   }
 
   handleInv(payload: Buffer, events: Events): void {
@@ -195,8 +265,7 @@ export class MessageHandlers {
           events.fireTxNotify({hash: tx});
           break;
         case this.invCodes.block:
-          let block = payload.slice(4, 36).reverse().toString('hex');
-          events.fireBlockNotify({hash: block});
+          this.handleBlock(payload, events);
           break;
         case this.invCodes.blockFiltered:
           let fBlock = payload.slice(4, 36).reverse().toString('hex');

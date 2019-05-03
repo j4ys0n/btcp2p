@@ -183,6 +183,7 @@ describe('Integration Tests', () => {
     // });
     btcp2p.onClient('block', (e: BlockNotifyEvent) => {
       btcp2p.clientEvents.clearBlockNotify();
+      console.log(e);
       expect(e.hash).to.be.equal(nextHash);
       btcp2p.client.end();
     });
