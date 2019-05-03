@@ -57,8 +57,21 @@ var readFlowingBytes = function (stream, amount, preRead, callback) {
 };
 // TODO create nonce for sending with ping
 var createNonce = function () {
+    return crypto.pseudoRandomBytes(8);
 };
 var BTCP2P = /** @class */ (function () {
+    /**
+     * @param options: StartOptions = {
+     *  name: string,
+     *  peerMagic: string,
+     *  disableTransactions: boolean,
+     *  host: string,
+     *  port: number,
+     *  listenPort: number
+     *  protocolVersion: number,
+     *  persist: boolean
+     * }
+     */
     function BTCP2P(options) {
         var _this = this;
         this.options = options;
@@ -253,6 +266,20 @@ var BTCP2P = /** @class */ (function () {
                 break;
         }
     };
+    BTCP2P.prototype.startServer = function () {
+        var _this = this;
+        var server = net.createServer(function (socket) {
+            socket.on('data', function (data) {
+                console.log('local server:');
+                console.log(data);
+            });
+        });
+        return new Promise(function (resolve, reject) {
+            server.listen(_this.options.listenPort, function () {
+                resolve(true);
+            });
+        });
+    };
     BTCP2P.prototype.connect = function (host, port) {
         var _this = this;
         if (host === void 0) { host = ''; }
@@ -295,7 +322,7 @@ var BTCP2P = /** @class */ (function () {
             this.util.packInt64LE(Date.now() / 1000 | 0),
             this.emptyNetAddress,
             this.emptyNetAddress,
-            crypto.pseudoRandomBytes(8),
+            createNonce(),
             this.userAgent,
             this.blockStartHeight,
             this.relayTransactions

@@ -1,5 +1,6 @@
 /// <reference types="node" />
 import * as net from 'net';
+import { StartOptions } from './interfaces/peer.interface';
 declare type Handler<E> = (event: E) => void;
 export declare class BTCP2P {
     private options;
@@ -75,7 +76,20 @@ export declare class BTCP2P {
     private onVersion;
     private fireVersion;
     on(event: string, handler: Handler<any>): void;
-    constructor(options: any);
+    /**
+     * @param options: StartOptions = {
+     *  name: string,
+     *  peerMagic: string,
+     *  disableTransactions: boolean,
+     *  host: string,
+     *  port: number,
+     *  listenPort: number
+     *  protocolVersion: number,
+     *  persist: boolean
+     * }
+     */
+    constructor(options: StartOptions);
+    startServer(): Promise<any>;
     connect(host?: string, port?: number): net.Socket;
     private sendVersion;
     private setupMessageParser;

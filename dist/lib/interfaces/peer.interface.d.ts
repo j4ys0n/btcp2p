@@ -2,10 +2,11 @@
 export interface StartOptions {
     name: string;
     peerMagic: string;
-    disableTransactions: boolean;
+    relayTransactions: boolean;
     host: string;
     port: number;
-    listenPort: number;
+    serverPort?: number;
+    startServer?: boolean;
     protocolVersion: number;
     persist: boolean;
 }

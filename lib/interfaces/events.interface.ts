@@ -30,3 +30,17 @@ export interface VersionEvent {
   height: number;
   relay: boolean;
 }
+export interface RejectedEvent {
+  message: string;
+  ccode: number;
+  name: string;
+  reason: string;
+  extra: string;
+}
+export interface AddressEvent {
+  addresses: Array<any>
+}
+export interface HeadersEvent {
+  raw: Buffer;
+  parsed: any;
+}
