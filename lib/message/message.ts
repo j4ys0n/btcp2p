@@ -148,6 +148,20 @@ export class Message {
     events.fireSentMessage({command: 'getaddr', payload: {}});
   }
 
+  sendGetBlocks(events: Events, socket: net.Socket, hash: string): void {
+    const hashCount = Buffer.from([0x01]);
+    const headerHashes = Buffer.from(this.util.reverseHexBytes(hash), 'hex');
+    const stopHash = Buffer.from(this.util.stopHash(32));
+    const payload = Buffer.concat([
+      this.util.packUInt32LE(this.messageOptions.protocolVersion),
+      hashCount,
+      headerHashes,
+      stopHash
+    ]);
+    this.sendMessage(this.commands.getblocks, payload, socket);
+    events.fireSentMessage({command: 'getblocks', payload: {}});
+  }
+
   sendAddr(events: Events, socket: net.Socket, ip: string, port: number): void {
     const count = Buffer.from([0x01]);
     const date = this.util.packUInt32LE(Date.now() / 1000 | 0);

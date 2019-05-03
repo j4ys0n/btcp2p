@@ -82,4 +82,19 @@ export class Utils {
     }
     return parseInt(compactSize.toString('hex'), 16);
   }
+
+  public stopHash(len: number): string {
+    let h: string = '';
+    while (len--) { h += '00' }
+    return h;
+  }
+
+  public reverseHexBytes(bytes: string): string {
+    const len = bytes.length/2;
+    let reversed = '';
+    for (let i = 0; i < len; i++) {
+      reversed = bytes.substr(i*2, 2) + reversed;
+    }
+    return reversed;
+  }
 }

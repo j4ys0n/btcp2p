@@ -112,10 +112,7 @@ export class MessageHandlers {
   parseHashes(hashLen: number, mParser: any): Array<string> {
     let hashes: Array<string> = [];
     const len = mParser.buffer.length - mParser.pointer;
-    const stopHash = ((len: number, h: string = ''): string => {
-      while (len--) { h += '00' }
-      return h;
-    })(hashLen);
+    const stopHash = this.util.stopHash(hashLen);
     let cursor = 0;
 
     for (cursor; cursor < len; cursor += hashLen){

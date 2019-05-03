@@ -4,7 +4,8 @@ const should = chai.should();
 
 import { BTCP2P } from '../lib/btcp2p';
 import {
-  ConnectEvent, DisconnectEvent, PeerMessageEvent, RejectedEvent
+  ConnectEvent, DisconnectEvent, PeerMessageEvent, RejectedEvent,
+  BlockNotifyEvent
 } from '../lib/interfaces/events.interface'
 
 
@@ -174,22 +175,36 @@ describe('Integration Tests', () => {
   //   done();
   // })
 
-  it('should connect to litecoin, wait 2 seconds, then disconnect', (done) => {
+  it('should connect to litecoin, request blocks, then disconnect', (done) => {
     btcp2p = new BTCP2PTest(integrationTestOptions);
-    btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
+    let nextHash = '';
+    // btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
+    //   console.log(e);
+    // });
+    btcp2p.onClient('block', (e: BlockNotifyEvent) => {
+      btcp2p.clientEvents.clearBlockNotify();
+      expect(e.hash).to.be.equal(nextHash);
+      btcp2p.client.end();
+    });
+    btcp2p.onClient('getheaders', (e: any) => {
+      btcp2p.clientEvents.clearGetHeaders();
       // console.log(e);
+      nextHash = e.parsed.hashes[0];
+      btcp2p.message.sendGetBlocks(btcp2p.clientEvents, btcp2p.client, e.parsed.hashes[1]);
+      // done();
     });
     btcp2p.onClient('connect', (e: ConnectEvent) => {
       btcp2p.clientEvents.clearConnect();
-      setTimeout(() => {
-        btcp2p.client.end();
-      }, 2000);
+      // setTimeout(() => {
+      //   btcp2p.client.end();
+      // }, 2000);
     });
     btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
       btcp2p.clientEvents.clearDisconnect();
       done();
     });
   });
+
 
   // it('should connect to litecoin, get addresses then disconnect', (done) => {
   //   btcp2p = new BTCP2PTest(integrationTestOptions);

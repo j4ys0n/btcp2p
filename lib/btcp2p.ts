@@ -148,8 +148,8 @@ export class BTCP2P {
   // client only
   private connect(host: string = '', port: number = 0): net.Socket {
     const client = net.connect({
-      host: (host === '') ? this.options.host as string : host,
-      port: (port === 0) ? this.options.port as number : port
+      host: (host === '') ? this.options.host : host,
+      port: (port === 0) ? this.options.port : port
     }, () => {
       this.rejectedRetryAttempts = 0;
       this.message.sendVersion(this.clientEvents, client);
