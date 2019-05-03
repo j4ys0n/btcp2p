@@ -274,4 +274,21 @@ export class Events {
         break;
     }
   }
+
+  public clearAllListeners(): void {
+    this.clearConnect();
+    this.clearDisconnect();
+    this.clearVersion();
+    this.clearVerack();
+    this.clearPing();
+    this.clearPong();
+    this.clearError();
+    this.clearReject();
+    this.clearBlockNotify();
+    this.clearTxNotify();
+    this.clearAddr();
+    this.clearGetHeaders();
+    this.clearPeerMessage();
+    this.clearSentMessage();
+  }
 }
