@@ -2,8 +2,8 @@
   "name": "btcp2p",
   "version": "1.0.0",
   "description": "light btc-based p2p client",
-  "main": "dist/btcp2p.js",
-  "typings": "dist/btcp2p.d.ts",
+  "main": "dist/lib/btcp2p.js",
+  "typings": "dist/lib/btcp2p.d.ts",
   "scripts": {
     "build": "tsc",
     "lint": "tslint -c tslint.json",
