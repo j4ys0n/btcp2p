@@ -40,6 +40,11 @@ var Utils = /** @class */ (function () {
         buff.writeUInt16LE(num, 0);
         return buff;
     };
+    Utils.prototype.packUInt16BE = function (num) {
+        var buff = new Buffer(2);
+        buff.writeUInt16BE(num, 0);
+        return buff;
+    };
     Utils.prototype.packUInt32LE = function (num) {
         var buff = new Buffer(4);
         buff.writeInt32LE(num, 0);
@@ -54,6 +59,40 @@ var Utils = /** @class */ (function () {
     Utils.prototype.varStringBuffer = function (s) {
         var strBuff = new Buffer(s);
         return Buffer.concat([this.varIntBuffer(strBuff.length), strBuff]);
+    };
+    Utils.prototype.fixedLenStringBuffer = function (s, len) {
+        var buff = Buffer.allocUnsafe(len);
+        buff.fill(0);
+        buff.write(s);
+        return buff;
+    };
+    Utils.prototype.commandStringBuffer = function (s) {
+        return this.fixedLenStringBuffer(s, 12);
+    };
+    // mp needs to be MessageParser, can't use as a type for some reason
+    Utils.prototype.getCompactSize = function (mp) {
+        var compactSize = mp.raw(1);
+        if (compactSize >= 0xfd) {
+            compactSize = Buffer.concat([
+                compactSize, mp.raw(1)
+            ]);
+        }
+        return parseInt(compactSize.toString('hex'), 16);
+    };
+    Utils.prototype.stopHash = function (len) {
+        var h = '';
+        while (len--) {
+            h += '00';
+        }
+        return h;
+    };
+    Utils.prototype.reverseHexBytes = function (bytes) {
+        var len = bytes.length / 2;
+        var reversed = '';
+        for (var i = 0; i < len; i++) {
+            reversed = bytes.substr(i * 2, 2) + reversed;
+        }
+        return reversed;
     };
     return Utils;
 }());

@@ -16,8 +16,6 @@ const ENVS = {
 }
 // general consts
 const MINUTE = 60 * 1000;
-const CONNECTION_RETRY = 5 * MINUTE;
-const PING_INTERVAL = 5 * MINUTE;
 
 export class BTCP2P {
   public client!: net.Socket;
@@ -26,9 +24,11 @@ export class BTCP2P {
   private serverStarting: boolean = false;
   private serverStarted: boolean = false;
   private serverPort!: number;
-  // separate event handlers for client and server
+  // separate event handlers for client and server (internal & external)
   protected clientEvents: Events = new Events();
+  // protected internalClientEvents: Events = new Events();
   protected serverEvents: Events = new Events(true);
+  // protected internalServerEvents: Events = new Events(true);
   // expose events to listen to for client and server
   public onClient = this.clientEvents.on.bind(this.clientEvents);
   public onServer = this.serverEvents.on.bind(this.serverEvents);
@@ -37,13 +37,14 @@ export class BTCP2P {
   protected message!: Message;
 
   private pings: any;
-  // if the remote peer acknowledges the version, it can be considered connected
-  private clientVerack = false;
-  private serverVerack = false;
+  private pingInterval = 5 * MINUTE;
+  // if the remote peer acknowledges the version (verack), it can be considered connected
+  private clientConnected = false;
+  private serverConnected = false;
+  private clientEventHandlersAdded = false;
 
-  private rejectedRetryMax = 3;
-  private rejectedRetryAttempts = 0;
-  private rejectedRetryPause = 2000;
+  protected rejectedRetryPause = MINUTE; // on disctonnect/reject
+  protected errorRetryPause = 3 * MINUTE; // on node crash/restart
 
   private headers!: Buffer;
   private waitingForHeaders = false;
@@ -80,32 +81,19 @@ export class BTCP2P {
 
     this.clientEvents.onConnectionRejected(event => {
       this.clientEvents.fireError({message: 'connection rejected, maybe banned, or old protocol version'});
-      if (this.options.persist) {
-        // pause for 2 seconds, try again.
-        if (this.rejectedRetryAttempts < this.rejectedRetryMax) {
-          this.rejectedRetryAttempts++;
-          setTimeout(() => {
-            this.connect();
-          }, this.rejectedRetryPause);
-        } else {
-          this.clientEvents.fireError({message: 'max rejected retries hit (' + this.rejectedRetryMax + ')'});
-        }
-      }
+      this.restartClient(this.rejectedRetryPause);
     });
 
     this.clientEvents.onDisconnect(event => {
-      this.clientVerack = false;
-      if (this.options.persist) {
-        this.connect();
-      }
+      this.restartClient(this.rejectedRetryPause);
     });
 
-    // start server and if necessary init connection
+    // start server if necessary and init connection
     if (this.options.startServer) {
       this.server = net.createServer((socket) => {
         this.serverSocket = socket;
         this.message.setupMessageParser(this.serverEvents, socket);
-        this.defaultEventHandlers(this.serverEvents, socket, 'serverVerack')
+        this.serverEventHandlers(this.serverEvents, socket)
       });
       this.startServer()
       .then(() => {
@@ -142,7 +130,30 @@ export class BTCP2P {
   private initConnection(): void {
     this.client = this.connect(this.options.host, this.options.port);
     this.message.setupMessageParser(this.clientEvents, this.client);
-    this.defaultEventHandlers(this.clientEvents, this.client, 'clientVerack');
+    if (!this.clientEventHandlersAdded) {
+      this.clientEventHandlers(this.clientEvents, this.client);
+    }
+  }
+
+  public restartClient(wait: number): Promise<boolean> {
+    if (this.options.persist && !this.clientConnected) {
+      return this.initRestartClient(wait);
+    } else {
+      return Promise.resolve(false);
+    }
+  }
+
+  private initRestartClient(wait: number): Promise<boolean> {
+    this.clientConnected = false;
+    this.client.end();
+    this.client.destroy();
+    clearInterval(this.pings);
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        this.initConnection();
+        resolve(true);
+      }, wait);
+    })
   }
 
   // client only
@@ -151,13 +162,12 @@ export class BTCP2P {
       host: (host === '') ? this.options.host : host,
       port: (port === 0) ? this.options.port : port
     }, () => {
-      this.rejectedRetryAttempts = 0;
       this.message.sendVersion(this.clientEvents, client);
       this.startPings(this.clientEvents, client);
     });
     client.on('close', () => {
-      if (this.clientVerack) {
-        this.clientVerack = false;
+      if (this.clientConnected) {
+        this.clientConnected = false;
         this.clientEvents.fireDisconnect({});
       } else if (this.validConnectionConfig) {
         this.clientEvents.fireConnectionRejected({});
@@ -169,20 +179,43 @@ export class BTCP2P {
       } else {
         this.clientEvents.fireError({message: 'socket error'});
       }
-      if (this.options.persist) {
-        setTimeout(() => {
-          this.connect();
-        }, CONNECTION_RETRY);
-      }
+      this.restartClient(this.errorRetryPause);
     });
 
     return client;
   }
 
-  private defaultEventHandlers(events: Events, socket: net.Socket, verack: string): void {
+  private clientEventHandlers(events: Events, socket: net.Socket): void {
     events.onVerack(e => {
-      if (!this[verack]) {
-        this[verack] = true;
+      if (!this.clientConnected) {
+        this.clientConnected = true;
+        events.fireConnect({});
+      }
+    });
+    events.onGetHeaders((payload: HeadersEvent) => {
+      if (!this.headers) {
+        this.waitingForHeaders = true;
+        this.message.sendGetHeaders(payload.raw, events, socket);
+      } else {
+        this.message.sendHeaders(this.headers, events, socket);
+      }
+    });
+    events.onHeaders((payload: HeadersEvent) => {
+      if (this.waitingForHeaders) {
+        this.headers = payload.raw;
+        this.waitingForHeaders = false;
+        this.message.sendHeaders(payload.raw, events, socket);
+      } else {
+        this.headers = payload.raw;
+      }
+    });
+    this.clientEventHandlersAdded = true;
+  }
+
+  private serverEventHandlers(events: Events, socket: net.Socket): void {
+    events.onVerack(e => {
+      if (!this.serverConnected) {
+        this.serverConnected = true;
         events.fireConnect({});
       }
     });
@@ -209,6 +242,6 @@ export class BTCP2P {
     clearInterval(this.pings);
     this.pings = setInterval(() => {
       this.message.sendPing(events, socket);
-    }, PING_INTERVAL);
+    }, this.pingInterval);
   }
 }
