@@ -5,6 +5,7 @@ var crypto_binary_1 = require("crypto-binary");
 var general_util_1 = require("../util/general.util");
 var message_handlers_1 = require("./message.handlers");
 var blocks_1 = require("../blocks/blocks");
+var peers_1 = require("../peers/peers");
 var readFlowingBytes = function (stream, amount, preRead, callback) {
     var buff = (preRead) ? preRead : Buffer.from([]);
     var readData = function (data) {
@@ -88,6 +89,7 @@ var Message = /** @class */ (function () {
         }
         this.handlers = new message_handlers_1.MessageHandlers(this.scope, this.util);
         this.blockHandler = new blocks_1.BlockHandler(this.scope, this.util);
+        this.peerHandler = new peers_1.PeerHandler(this.scope);
     }
     Message.prototype.sendMessage = function (command, payload) {
         var message = Buffer.concat([
@@ -257,7 +259,7 @@ var Message = /** @class */ (function () {
                 this.handlers.handleInv(payload);
                 break;
             case this.commands.addr.toString():
-                this.handlers.handleAddr(payload);
+                this.peerHandler.handleAddr(payload);
                 break;
             case this.commands.verack.toString():
                 this.scope.events.fire('verack', true);

@@ -1,6 +1,7 @@
 import { Utils } from '../util/general.util';
 import { MessageHandlers } from './message.handlers';
 import { BlockHandler } from '../blocks/blocks';
+import { PeerHandler } from '../peers/peers';
 import { ProtocolScope } from '../interfaces/peer.interface';
 export interface MessageOptions {
     magic: string;
@@ -13,6 +14,7 @@ export declare class Message {
     protected util: Utils;
     protected handlers: MessageHandlers;
     protected blockHandler: BlockHandler;
+    protected peerHandler: PeerHandler;
     private magic;
     private magicInt;
     private networkServices;

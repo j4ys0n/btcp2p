@@ -2,11 +2,11 @@ import * as net from 'net';
 import * as crypto from 'crypto';
 import { MessageBuilder } from 'crypto-binary';
 
-import { Events } from '../events/events';
 import { InternalEvents } from '../events/events.internal';
 import { Utils } from '../util/general.util';
 import { MessageHandlers } from './message.handlers';
 import { BlockHandler } from '../blocks/blocks';
+import { PeerHandler } from '../peers/peers';
 
 import { ProtocolScope } from '../interfaces/peer.interface';
 
@@ -47,6 +47,7 @@ export class Message {
   protected util: Utils = new Utils();
   protected handlers!: MessageHandlers;
   protected blockHandler!: BlockHandler;
+  protected peerHandler!: PeerHandler;
 
   private magic!: Buffer;
   private magicInt: number = 0;
@@ -109,6 +110,7 @@ export class Message {
     }
     this.handlers = new MessageHandlers(this.scope, this.util);
     this.blockHandler = new BlockHandler(this.scope, this.util);
+    this.peerHandler = new PeerHandler(this.scope);
   }
 
   sendMessage(command: Buffer, payload: Buffer): void {
@@ -291,7 +293,7 @@ export class Message {
         this.handlers.handleInv(payload);
         break;
       case this.commands.addr.toString():
-        this.handlers.handleAddr(payload);
+        this.peerHandler.handleAddr(payload);
         break;
       case this.commands.verack.toString():
         this.scope.events.fire('verack', true);

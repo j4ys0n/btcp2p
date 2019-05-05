@@ -1,5 +1,5 @@
 import { Utils } from '../util/general.util';
-import { RejectedEvent, AddressEvent } from '../interfaces/events.interface';
+import { RejectedEvent } from '../interfaces/events.interface';
 import { ProtocolScope } from '../interfaces/peer.interface';
 export interface Nonce {
     nonce: Buffer;
@@ -41,11 +41,6 @@ export declare class MessageHandlers {
     handlePong(payload: Buffer): Promise<Nonce>;
     handleReject(payload: Buffer): Promise<RejectedEvent>;
     handleVersion(payload: Buffer): Promise<Version>;
-    handleAddr(payload: Buffer): Promise<AddressEvent>;
-    handleBlock(payload: Buffer): void;
     handleInv(payload: Buffer): void;
     private parseNonce;
-    private getHost;
-    private getAddr;
-    private parseAddrMessage;
 }
