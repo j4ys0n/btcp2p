@@ -1,7 +1,6 @@
-/// <reference types="node" />
 import { Utils } from '../util/general.util';
-import { Events } from '../events/events';
-import { RejectedEvent, AddressEvent, HeadersEvent } from '../interfaces/events.interface';
+import { RejectedEvent, AddressEvent } from '../interfaces/events.interface';
+import { ProtocolScope } from '../interfaces/peer.interface';
 export interface Nonce {
     nonce: Buffer;
 }
@@ -17,7 +16,9 @@ export interface Version {
     relay: boolean;
 }
 export declare class MessageHandlers {
+    private scope;
     private util;
+    private blockHandler;
     protected invCodes: {
         error: number;
         tx: number;
@@ -35,17 +36,14 @@ export declare class MessageHandlers {
         42: string;
         43: string;
     };
-    constructor(util: Utils);
-    handlePing(payload: Buffer, events: Events): Promise<Nonce>;
-    handlePong(payload: Buffer, events: Events): Promise<Nonce>;
-    handleReject(payload: Buffer, events: Events): Promise<RejectedEvent>;
-    handleVersion(payload: Buffer, events: Events): Promise<Version>;
-    handleAddr(payload: Buffer, events: Events): Promise<AddressEvent>;
-    parseHashes(hashLen: number, mParser: any): Array<string>;
-    handleGetHeaders(payload: Buffer, events: Events): Promise<HeadersEvent>;
-    parseHeaders(count: number, mParser: any): Array<any>;
-    handleHeaders(payload: Buffer, events: Events): Promise<HeadersEvent>;
-    handleInv(payload: Buffer, events: Events): void;
+    constructor(scope: ProtocolScope, util: Utils);
+    handlePing(payload: Buffer): Promise<Nonce>;
+    handlePong(payload: Buffer): Promise<Nonce>;
+    handleReject(payload: Buffer): Promise<RejectedEvent>;
+    handleVersion(payload: Buffer): Promise<Version>;
+    handleAddr(payload: Buffer): Promise<AddressEvent>;
+    handleBlock(payload: Buffer): void;
+    handleInv(payload: Buffer): void;
     private parseNonce;
     private getHost;
     private getAddr;

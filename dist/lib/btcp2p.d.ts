@@ -1,28 +1,26 @@
-/// <reference types="node" />
-import * as net from 'net';
-import { Events } from './events/events';
 import { Utils } from './util/general.util';
-import { Message } from './message/message';
-import { StartOptions } from './interfaces/peer.interface';
+import { StartOptions, ProtocolScope } from './interfaces/peer.interface';
 export declare class BTCP2P {
     private options;
-    client: net.Socket;
-    private server;
-    serverSocket: net.Socket;
+    private clientSocket;
+    private serverInstance;
+    private serverSocket;
     private serverStarting;
     private serverStarted;
     private serverPort;
-    protected clientEvents: Events;
-    protected serverEvents: Events;
-    onClient: (event: string, handler: import("./events/events").Handler<any>) => void;
-    onServer: (event: string, handler: import("./events/events").Handler<any>) => void;
+    private message;
+    private clientEvents;
+    client: ProtocolScope;
+    private serverEvents;
+    server: ProtocolScope;
+    private internalEvents;
+    protected internal: ProtocolScope;
     protected util: Utils;
-    protected message: Message;
     private pings;
     private pingInterval;
-    private clientConnected;
-    private serverConnected;
-    private clientEventHandlersAdded;
+    private internalScopeInit;
+    private serverScopeInit;
+    private clientScopeInit;
     protected rejectedRetryPause: number;
     protected errorRetryPause: number;
     private headers;
@@ -43,12 +41,14 @@ export declare class BTCP2P {
      */
     constructor(options: StartOptions);
     startServer(): Promise<any>;
-    stopServer(): void;
+    private initInternalScope;
+    private initServerScope;
+    private initClientScope;
+    stopServer(): Promise<any>;
     private initConnection;
     restartClient(wait: number): Promise<boolean>;
     private initRestartClient;
     private connect;
-    private clientEventHandlers;
-    private serverEventHandlers;
+    private initEventHandlers;
     private startPings;
 }

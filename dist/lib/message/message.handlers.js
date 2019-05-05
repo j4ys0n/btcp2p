@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto_binary_1 = require("crypto-binary");
+var blocks_1 = require("../blocks/blocks");
 var IPV6_IPV4_PADDING = Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255]);
 var MessageHandlers = /** @class */ (function () {
-    function MessageHandlers(util) {
+    function MessageHandlers(scope, util) {
+        this.scope = scope;
         this.util = util;
         // https://en.bitcoin.it/wiki/Protocol_specification#Inventory_Vectors
         this.invCodes = {
@@ -24,18 +26,19 @@ var MessageHandlers = /** @class */ (function () {
             42: 'REJECT_INSUFFICIENTFEE',
             43: 'REJECT_CHECKPOINT'
         };
+        this.blockHandler = new blocks_1.BlockHandler(this.scope, this.util);
     }
-    MessageHandlers.prototype.handlePing = function (payload, events) {
+    MessageHandlers.prototype.handlePing = function (payload) {
         var nonce = this.parseNonce(payload);
-        events.firePing(nonce);
+        this.scope.events.fire('ping', nonce);
         return Promise.resolve({ nonce: nonce });
     };
-    MessageHandlers.prototype.handlePong = function (payload, events) {
+    MessageHandlers.prototype.handlePong = function (payload) {
         var nonce = this.parseNonce(payload);
-        events.firePong(nonce);
+        this.scope.events.fire('pong', nonce);
         return Promise.resolve({ nonce: nonce });
     };
-    MessageHandlers.prototype.handleReject = function (payload, events) {
+    MessageHandlers.prototype.handleReject = function (payload) {
         var p = new crypto_binary_1.MessageParser(payload);
         var messageLen = p.readInt8();
         var message = p.raw(messageLen).toString();
@@ -52,10 +55,10 @@ var MessageHandlers = /** @class */ (function () {
             reason: reason,
             extra: extra
         };
-        events.fireReject(rejected);
+        this.scope.events.fire('reject', rejected);
         return Promise.resolve(rejected);
     };
-    MessageHandlers.prototype.handleVersion = function (payload, events) {
+    MessageHandlers.prototype.handleVersion = function (payload) {
         var s = new crypto_binary_1.MessageParser(payload);
         // https://en.bitcoin.it/wiki/Protocol_documentation#version
         var parsed = {
@@ -72,72 +75,88 @@ var MessageHandlers = /** @class */ (function () {
         if (parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
             parsed.time = new Date(parsed.time.readUInt32LE(0) * 1000);
         }
-        events.fireVersion(parsed);
+        this.util.log('core', 'info', JSON.stringify(parsed));
+        this.scope.events.fire('version', parsed);
         return Promise.resolve(parsed);
     };
-    MessageHandlers.prototype.handleAddr = function (payload, events) {
+    MessageHandlers.prototype.handleAddr = function (payload) {
         var addrs = {
-            addresses: this.parseAddrMessage(payload, events)
+            addresses: this.parseAddrMessage(payload)
         };
-        events.fireAddr(addrs);
+        this.scope.events.fire('addr', addrs);
         return Promise.resolve(addrs);
     };
-    MessageHandlers.prototype.parseHashes = function (hashLen, mParser) {
-        var hashes = [];
-        var len = mParser.buffer.length - mParser.pointer;
-        var stopHash = this.util.stopHash(hashLen);
-        var cursor = 0;
-        for (cursor; cursor < len; cursor += hashLen) {
-            var hash = mParser.raw(hashLen).reverse().toString('hex');
-            if (hash !== stopHash) {
-                hashes.push(hash);
-            }
-        }
-        return hashes;
-    };
-    MessageHandlers.prototype.handleGetHeaders = function (payload, events) {
+    // getWitnessFlag(mParser: any): boolean {
+    //   const flag = mParser.raw(2).toString('hex');
+    //   if (flag === '0001') {
+    //     return true;
+    //   }
+    //   mParser.incrPointer(-2);
+    //   return false;
+    // }
+    //
+    // parseTxIn(count: number, mParser: any): Array<any> {
+    //   const vins: Array<any> = [];
+    //   for (let i = 0; i < count; i++) {
+    //     const hash = mParser.raw(32).toString('hex');
+    //     const index = mParser.readUInt32LE();
+    //     const scriptLen = this.util.getCompactSize(mParser);
+    //     const vin = {
+    //       hash: hash,
+    //       index: index,
+    //       script: mParser.raw(scriptLen),
+    //       sequence: mParser.readUInt32LE()
+    //     }
+    //     vins.push(vin);
+    //   }
+    //   return vins;
+    // }
+    //
+    // parseTxes(mParser: any): any {
+    //   const hashCount = this.util.getCompactSize(mParser);
+    //   for (let i = 0; i < hashCount; i++) {
+    //     const version = mParser.readUInt32LE()
+    //     const witnessFlag = this.getWitnessFlag(mParser);
+    //     const txInCount = this.util.getCompactSize(mParser);
+    //     const tx = {
+    //       version: version,
+    //       witnessFlag: witnessFlag,
+    //       vin: this.parseTxIn(txInCount, mParser)
+    //     }
+    //   }
+    // }
+    // parseTxHashes(mParser: any): Array<string> {
+    //   const txes: Array<string> = [];
+    //   const hashCount = this.util.getCompactSize(mParser);
+    //   for (let i = 0; i < hashCount; i++) {
+    //     const hash = mParser.raw(32).reverse().toString('hex');
+    //     txes.push(hash);
+    //   }
+    //   return txes;
+    // }
+    MessageHandlers.prototype.handleBlock = function (payload) {
+        // let block = payload.slice(4, 36).reverse().toString('hex');
         var p = new crypto_binary_1.MessageParser(payload);
-        var version = p.readUInt32LE();
-        // const hashCount = p.raw(1).toString('hex');
-        var hashCount = this.util.getCompactSize(p);
-        var hashes = this.parseHashes(32, p);
-        var parsed = {
-            version: version,
-            hashCount: hashCount,
-            hashes: hashes
+        // const header = this.parseHeader(p);
+        var header = {
+            version: p.readUInt32LE(),
+            hash: Buffer.from(p.raw(32)).reverse().toString('hex'),
+            // merkle_root: p.raw(32)
+            confirmations: p.readUInt32LE(),
+            // size: p.readUInt32LE(),
+            // strippedsize: p.readUInt32LE(),
+            merkle_root: Buffer.from(p.raw(32)).reverse().toString('hex')
+            // timestamp: new Date(p.readUInt32LE()*1000),
+            // bits: p.readUInt32LE(),
+            // nonce: p.readUInt32LE()
+            // raw: payload.toString('hex')
         };
-        // console.log(parsed);
-        events.fireGetHeaders({ raw: payload, parsed: parsed });
-        return Promise.resolve({ raw: payload, parsed: parsed });
+        // const hashCount = this.util.getCompactSize(p);
+        // const txes = this.parseTxHashes(p);
+        // const block = {...header, ...{count: hashCount}}
+        // events.fireBlockNotify(header);
     };
-    MessageHandlers.prototype.parseHeaders = function (count, mParser) {
-        var headers = [];
-        for (var i = 0; i < count; i++) {
-            var header = {
-                version: mParser.readUInt32LE(),
-                prev_block: mParser.raw(32).reverse().toString('hex'),
-                merkle_root: mParser.raw(32).reverse().toString('hex'),
-                timestamp: new Date(mParser.readUInt32LE(0) * 1000),
-                bits: mParser.readUInt32LE(),
-                nonce: mParser.readUInt32LE()
-            };
-            headers.push(header);
-        }
-        return headers;
-    };
-    MessageHandlers.prototype.handleHeaders = function (payload, events) {
-        var p = new crypto_binary_1.MessageParser(payload);
-        var hashCount = this.util.getCompactSize(p);
-        var hashes = this.parseHeaders(hashCount, p);
-        var parsed = {
-            hashCount: hashCount,
-            hashes: hashes
-        };
-        // console.log(parsed);
-        events.fireHeaders({ raw: payload, parsed: parsed });
-        return Promise.resolve({ raw: payload, parsed: parsed });
-    };
-    MessageHandlers.prototype.handleInv = function (payload, events) {
+    MessageHandlers.prototype.handleInv = function (payload) {
         var count = payload.readUInt8(0);
         payload = payload.slice(1);
         if (count >= 0xfd) {
@@ -152,7 +171,7 @@ var MessageHandlers = /** @class */ (function () {
             catch (e) {
             }
             if (type) {
-                events.firePeerMessage({ command: 'inv', payload: { type: type } });
+                this.scope.events.fire('peer_message', { command: 'inv', payload: { type: type } });
             }
             switch (type) {
                 case this.invCodes.error:
@@ -160,11 +179,11 @@ var MessageHandlers = /** @class */ (function () {
                     break;
                 case this.invCodes.tx:
                     var tx = payload.slice(4, 36).toString('hex');
-                    events.fireTxNotify({ hash: tx });
+                    this.scope.events.fire('tx', { hash: tx });
                     break;
                 case this.invCodes.block:
-                    var block = payload.slice(4, 36).reverse().toString('hex');
-                    events.fireBlockNotify({ hash: block });
+                    this.blockHandler.handleBlockInv(payload);
+                    // this.scope.events.fire('blockinv', payload);
                     break;
                 case this.invCodes.blockFiltered:
                     var fBlock = payload.slice(4, 36).reverse().toString('hex');
@@ -205,7 +224,7 @@ var MessageHandlers = /** @class */ (function () {
                 version: 6 };
         }
     };
-    MessageHandlers.prototype.getAddr = function (buff, events) {
+    MessageHandlers.prototype.getAddr = function (buff) {
         var addr = {
             hostRaw: Buffer.from([]),
             host: '',
@@ -231,16 +250,16 @@ var MessageHandlers = /** @class */ (function () {
         }
         else {
             /* istanbul ignore next */
-            events.fireError({ message: 'address field length not 30', payload: buff });
+            this.scope.events.fire('error', { message: 'address field length not 30', payload: buff });
         }
         return addr;
     };
-    MessageHandlers.prototype.parseAddrMessage = function (payload, events) {
+    MessageHandlers.prototype.parseAddrMessage = function (payload) {
         var s = new crypto_binary_1.MessageParser(payload);
         var addrs = [];
         var addrNum = s.readVarInt();
         for (var i = 0; i < addrNum; i++) {
-            var addr = this.getAddr(s.raw(30), events);
+            var addr = this.getAddr(s.raw(30));
             addrs.push(addr);
         }
         return addrs;

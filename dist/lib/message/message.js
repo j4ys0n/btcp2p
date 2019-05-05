@@ -4,6 +4,7 @@ var crypto = require("crypto");
 var crypto_binary_1 = require("crypto-binary");
 var general_util_1 = require("../util/general.util");
 var message_handlers_1 = require("./message.handlers");
+var blocks_1 = require("../blocks/blocks");
 var readFlowingBytes = function (stream, amount, preRead, callback) {
     var buff = (preRead) ? preRead : Buffer.from([]);
     var readData = function (data) {
@@ -32,10 +33,10 @@ var Message = /** @class */ (function () {
      *  protocolVersion: number,
      * }
      */
-    function Message(messageOptions) {
+    function Message(messageOptions, scope) {
         this.messageOptions = messageOptions;
+        this.scope = scope;
         this.util = new general_util_1.Utils();
-        this.handlers = new message_handlers_1.MessageHandlers(this.util);
         this.magicInt = 0;
         // version message vars
         this.networkServices = Buffer.from('0100000000000000', 'hex'); //NODE_NETWORK services (value 1 packed as uint64)
@@ -85,8 +86,10 @@ var Message = /** @class */ (function () {
         else {
             this.relayTransactions = Buffer.from('0x00', 'hex');
         }
+        this.handlers = new message_handlers_1.MessageHandlers(this.scope, this.util);
+        this.blockHandler = new blocks_1.BlockHandler(this.scope, this.util);
     }
-    Message.prototype.sendMessage = function (command, payload, socket) {
+    Message.prototype.sendMessage = function (command, payload) {
         var message = Buffer.concat([
             this.magic,
             command,
@@ -94,9 +97,9 @@ var Message = /** @class */ (function () {
             this.util.sha256d(payload).slice(0, 4),
             payload
         ]);
-        socket.write(message);
+        this.scope.socket.write(message);
     };
-    Message.prototype.sendVersion = function (events, socket) {
+    Message.prototype.sendVersion = function () {
         // https://en.bitcoin.it/wiki/Protocol_documentation#version
         var payload = Buffer.concat([
             this.util.packUInt32LE(this.messageOptions.protocolVersion),
@@ -109,27 +112,32 @@ var Message = /** @class */ (function () {
             this.blockStartHeight,
             this.relayTransactions
         ]);
-        this.sendMessage(this.commands.version, payload, socket);
-        events.fireSentMessage({ command: 'version' });
+        this.sendMessage(this.commands.version, payload);
+        this.scope.events.fire('sent_message', { command: 'version' });
     };
-    Message.prototype.sendPing = function (events, socket) {
+    Message.prototype.sendVerack = function () {
+        // TODO lets actually check the version here instead of just confirming
+        this.sendMessage(this.commands.verack, Buffer.from([]));
+        this.scope.events.fire('sent_message', { command: 'verack' });
+    };
+    Message.prototype.sendPing = function () {
         var payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
-        this.sendMessage(this.commands.ping, payload, socket);
-        events.fireSentMessage({ command: 'ping' });
+        this.sendMessage(this.commands.ping, payload);
+        this.scope.events.fire('sent_message', { command: 'ping' });
     };
-    Message.prototype.sendHeaders = function (payload, events, socket) {
-        this.sendMessage(this.commands.headers, payload, socket);
-        events.fireSentMessage({ command: 'headers', payload: {} });
+    Message.prototype.sendHeaders = function (payload) {
+        this.sendMessage(this.commands.headers, payload);
+        this.scope.events.fire('sent_message', { command: 'headers', payload: {} });
     };
-    Message.prototype.sendGetHeaders = function (payload, events, socket) {
-        this.sendMessage(this.commands.getheaders, payload, socket);
-        events.fireSentMessage({ command: 'getheaders', payload: {} });
+    Message.prototype.sendGetHeaders = function (payload) {
+        this.sendMessage(this.commands.getheaders, payload);
+        this.scope.events.fire('sent_message', { command: 'getheaders', payload: {} });
     };
-    Message.prototype.sendGetAddr = function (events, socket) {
-        this.sendMessage(this.commands.getaddr, Buffer.from([]), socket);
-        events.fireSentMessage({ command: 'getaddr', payload: {} });
+    Message.prototype.sendGetAddr = function () {
+        this.sendMessage(this.commands.getaddr, Buffer.from([]));
+        this.scope.events.fire('sent_message', { command: 'getaddr', payload: {} });
     };
-    Message.prototype.sendGetBlocks = function (events, socket, hash) {
+    Message.prototype.sendGetBlocks = function (hash) {
         var hashCount = Buffer.from([0x01]);
         var headerHashes = Buffer.from(this.util.reverseHexBytes(hash), 'hex');
         var stopHash = Buffer.from(this.util.stopHash(32));
@@ -139,10 +147,10 @@ var Message = /** @class */ (function () {
             headerHashes,
             stopHash
         ]);
-        this.sendMessage(this.commands.getblocks, payload, socket);
-        events.fireSentMessage({ command: 'getblocks', payload: {} });
+        this.sendMessage(this.commands.getblocks, payload);
+        this.scope.events.fire('sent_message', { command: 'getblocks', payload: {} });
     };
-    Message.prototype.sendAddr = function (events, socket, ip, port) {
+    Message.prototype.sendAddr = function (ip, port) {
         var count = Buffer.from([0x01]);
         var date = this.util.packUInt32LE(Date.now() / 1000 | 0);
         var host = this.ipTo16ByteBuffer(ip);
@@ -150,10 +158,10 @@ var Message = /** @class */ (function () {
         var payload = Buffer.concat([
             count, date, this.networkServices, host, prt
         ]);
-        this.sendMessage(this.commands.addr, payload, socket);
-        events.fireSentMessage({ command: 'getaddr', payload: payload });
+        this.sendMessage(this.commands.addr, payload);
+        this.scope.events.fire('sent_message', { command: 'getaddr', payload: payload });
     };
-    Message.prototype.sendReject = function (msg, ccode, reason, extra, socket) {
+    Message.prototype.sendReject = function (msg, ccode, reason, extra) {
         var msgBytes = msg.length;
         var reasonBytes = reason.length;
         var extraBytes = extra.length;
@@ -165,22 +173,22 @@ var Message = /** @class */ (function () {
         message.putInt8(reasonBytes);
         message.putString(reason);
         message.putString(extra);
-        this.sendMessage(this.commands.reject, message.buffer, socket);
+        this.sendMessage(this.commands.reject, message.buffer);
     };
-    Message.prototype.setupMessageParser = function (events, socket) {
+    Message.prototype.setupMessageParser = function () {
         var _this = this;
         var beginReadingMessage = function (preRead) {
-            readFlowingBytes(socket, 24, preRead, function (header, lopped) {
+            readFlowingBytes(_this.scope.socket, 24, preRead, function (header, lopped) {
                 var msgMagic;
                 try {
                     msgMagic = header.readUInt32LE(0);
                 }
                 catch (e) {
-                    events.fireError({ message: 'read peer magic failed in setupMessageParser' });
+                    _this.scope.events.fire('error', { message: 'read peer magic failed in setupMessageParser' });
                     return;
                 }
                 if (msgMagic !== _this.magicInt) {
-                    events.fireError({ message: 'bad magic' });
+                    _this.scope.events.fire('error', { message: 'bad magic' });
                     try {
                         while (header.readUInt32LE(0) !== _this.magicInt && header.length >= 4) {
                             header = header.slice(1);
@@ -204,13 +212,13 @@ var Message = /** @class */ (function () {
                 var msgLength = header.readUInt32LE(16);
                 var msgChecksum = header.readUInt32LE(20);
                 // console.log('--', msgCommand, '--', header);
-                readFlowingBytes(socket, msgLength, lopped, function (payload, lopped) {
+                readFlowingBytes(_this.scope.socket, msgLength, lopped, function (payload, lopped) {
                     if (_this.util.sha256d(payload).readUInt32LE(0) !== msgChecksum) {
-                        events.fireError({ message: 'bad payload - failed checksum' });
+                        _this.scope.events.fire('error', { message: 'bad payload - failed checksum' });
                         // beginReadingMessage(null); // TODO do we need this?
                         return;
                     }
-                    _this.handleMessage(msgCommand, payload, events, socket);
+                    _this.handleMessage(msgCommand, payload);
                     beginReadingMessage(lopped);
                 });
             });
@@ -227,49 +235,48 @@ var Message = /** @class */ (function () {
         ];
         return Buffer.concat(ipv6Padded);
     };
-    Message.prototype.handleMessage = function (command, payload, events, socket) {
+    Message.prototype.handleMessage = function (command, payload) {
         var _this = this;
-        events.firePeerMessage({ command: command });
+        this.scope.events.fire('peer_message', { command: command });
         // console.log(payload);
         switch (command) {
             case this.commands.ping.toString():
-                this.handlers.handlePing(payload, events)
+                this.handlers.handlePing(payload)
                     .then(function (ping) {
                     // send pong
-                    _this.sendMessage(_this.commands.pong, ping.nonce, socket);
-                    events.fireSentMessage({ command: 'pong', payload: {
+                    _this.sendMessage(_this.commands.pong, ping.nonce);
+                    _this.scope.events.fire('sent_message', { command: 'pong', payload: {
                             message: 'nonce: ' + ping.nonce.toString('hex')
                         } });
                 });
                 break;
             case this.commands.pong.toString():
-                this.handlers.handlePong(payload, events);
+                this.handlers.handlePong(payload);
                 break;
             case this.commands.inv.toString():
-                this.handlers.handleInv(payload, events);
+                this.handlers.handleInv(payload);
                 break;
             case this.commands.addr.toString():
-                this.handlers.handleAddr(payload, events);
+                this.handlers.handleAddr(payload);
                 break;
             case this.commands.verack.toString():
-                events.fireVerack(true);
+                this.scope.events.fire('verack', true);
                 break;
             case this.commands.version.toString():
-                this.handlers.handleVersion(payload, events)
+                this.handlers.handleVersion(payload)
                     .then(function (version) {
                     // console.log(version);
-                    _this.sendMessage(_this.commands.verack, Buffer.from([]), socket);
-                    events.fireSentMessage({ command: 'verack' });
+                    _this.sendVerack();
                 });
                 break;
             case this.commands.reject.toString():
-                this.handlers.handleReject(payload, events);
+                this.handlers.handleReject(payload);
                 break;
             case this.commands.getheaders.toString():
-                this.handlers.handleGetHeaders(payload, events);
+                this.blockHandler.handleGetHeaders(payload);
                 break;
             case this.commands.headers.toString():
-                this.handlers.handleHeaders(payload, events);
+                this.blockHandler.handleHeaders(payload);
                 break;
             default:
                 // nothing

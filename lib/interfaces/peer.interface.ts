@@ -1,3 +1,6 @@
+import * as net from 'net';
+import { Events } from '../events/events';
+import { Message } from '../message/message';
 
 export interface StartOptions {
   name: string;
@@ -9,6 +12,14 @@ export interface StartOptions {
   startServer?: boolean;
   protocolVersion: number;
   persist: boolean;
+}
+
+export interface ProtocolScope {
+  events: Events;
+  on: Events['on'];
+  socket: net.Socket;
+  message: Message;
+  connected: boolean;
 }
 
 export interface PeerAddress {

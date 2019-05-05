@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var general_util_1 = require("../util/general.util");
 var EventDispatcher = /** @class */ (function () {
     function EventDispatcher() {
         this.handlers = [];
@@ -19,9 +20,11 @@ var EventDispatcher = /** @class */ (function () {
     return EventDispatcher;
 }());
 var Events = /** @class */ (function () {
-    function Events(server) {
-        if (server === void 0) { server = false; }
-        this.server = server;
+    function Events(scope) {
+        if (scope === void 0) { scope = { client: true, server: false }; }
+        this.scope = scope;
+        this.util = new general_util_1.Utils();
+        this.scopedTo = '';
         // connect
         this.connectDispatcher = new EventDispatcher();
         // disconnect
@@ -36,6 +39,8 @@ var Events = /** @class */ (function () {
         this.sentMessageDispatcher = new EventDispatcher();
         // block notify
         this.blockNotifyDispatcher = new EventDispatcher();
+        // block inv notify
+        this.blockInvDispatcher = new EventDispatcher();
         // tx notify
         this.txNotifyDispatcher = new EventDispatcher();
         // peer message
@@ -56,6 +61,8 @@ var Events = /** @class */ (function () {
         this.headersDispatcher = new EventDispatcher();
         // server only events
         this.serverStartDispatcher = new EventDispatcher();
+        this.scopedTo = (scope.client) ? 'client' : (scope.server) ? 'server' : 'internal';
+        this.util.log('core', 'debug', 'initializing events for ' + this.scopedTo);
     }
     Events.prototype.onConnect = function (handler) {
         this.connectDispatcher.register(handler);
@@ -119,6 +126,15 @@ var Events = /** @class */ (function () {
     };
     Events.prototype.clearBlockNotify = function () {
         this.blockNotifyDispatcher.clear();
+    };
+    Events.prototype.onBlockInv = function (handler) {
+        this.blockInvDispatcher.register(handler);
+    };
+    Events.prototype.fireBlockInv = function (event) {
+        this.blockInvDispatcher.fire(event);
+    };
+    Events.prototype.clearBlockInv = function () {
+        this.blockInvDispatcher.clear();
     };
     Events.prototype.onTxNotify = function (handler) {
         this.txNotifyDispatcher.register(handler);
@@ -202,71 +218,86 @@ var Events = /** @class */ (function () {
         this.headersDispatcher.clear();
     };
     Events.prototype.onServerStart = function (handler) {
-        if (this.server) {
+        if (this.scope.server) {
             this.serverStartDispatcher.register(handler);
         }
     };
     Events.prototype.fireServerStart = function (event) {
-        if (this.server) {
+        if (this.scope.server) {
             this.serverStartDispatcher.fire(event);
         }
     };
     Events.prototype.clearServerStart = function () {
-        if (this.server) {
+        if (this.scope.server) {
             this.serverStartDispatcher.clear();
+        }
+    };
+    Events.prototype.fire = function (event, payload, propagate) {
+        var command = (payload.command) ? ' -->' + payload.command : '';
+        this.util.log('core', 'debug', '[' + this.scopedTo + '] firing event for ' + event + command);
+        var triggerMapping = {
+            'connect': this.fireConnect,
+            'connection_rejected': this.fireConnectionRejected,
+            'disconnect': this.fireDisconnect,
+            'version': this.fireVersion,
+            'verack': this.fireVerack,
+            'ping': this.firePing,
+            'pong': this.firePong,
+            'error': this.fireError,
+            'reject': this.fireReject,
+            'block': this.fireBlockNotify,
+            'blockinv': this.fireBlockInv,
+            'tx': this.fireTxNotify,
+            'addr': this.fireAddr,
+            'getheaders': this.fireGetHeaders,
+            'headers': this.fireHeaders,
+            'peer_message': this.firePeerMessage,
+            'sent_message': this.fireSentMessage
+        };
+        var keys = Object.keys(triggerMapping);
+        if (keys.indexOf(event) > -1) {
+            var trigger = triggerMapping[event].bind(this);
+            trigger(payload);
+        }
+        else {
+            this.fireError({
+                message: event + ' event does not exist',
+                payload: new Error()
+            });
         }
     };
     // event handlers
     Events.prototype.on = function (event, handler) {
-        switch (event) {
-            case 'connect':
-                this.onConnect(handler);
-                break;
-            case 'disconnect':
-                this.onDisconnect(handler);
-                break;
-            case 'version':
-                this.onVersion(handler);
-                break;
-            case 'verack':
-                this.onVerack(handler);
-                break;
-            case 'ping':
-                this.onPing(handler);
-                break;
-            case 'pong':
-                this.onPong(handler);
-                break;
-            case 'error':
-                this.onError(handler);
-                break;
-            case 'reject':
-                this.onReject(handler);
-                break;
-            case 'block':
-                this.onBlockNotify(handler);
-                break;
-            case 'tx':
-                this.onTxNotify(handler);
-                break;
-            case 'addr':
-                this.onAddr(handler);
-                break;
-            case 'getheaders':
-                this.onGetHeaders(handler);
-                break;
-            case 'peer_message':
-                this.onPeerMessage(handler);
-                break;
-            case 'sent_message':
-                this.onSentMessage(handler);
-                break;
-            default:
-                this.fireError({
-                    message: event + ' event does not exist',
-                    payload: new Error()
-                });
-                break;
+        this.util.log('core', 'debug', '[' + this.scopedTo + '] adding event listener for ' + event);
+        var handlerMapping = {
+            'connect': this.onConnect,
+            'connection_rejected': this.onConnectionRejected,
+            'disconnect': this.onDisconnect,
+            'version': this.onVersion,
+            'verack': this.onVerack,
+            'ping': this.onPing,
+            'pong': this.onPong,
+            'error': this.onError,
+            'reject': this.onReject,
+            'block': this.onBlockNotify,
+            'blockinv': this.onBlockInv,
+            'tx': this.onTxNotify,
+            'addr': this.onAddr,
+            'getheaders': this.onGetHeaders,
+            'headers': this.onHeaders,
+            'peer_message': this.onPeerMessage,
+            'sent_message': this.onSentMessage
+        };
+        var keys = Object.keys(handlerMapping);
+        if (keys.indexOf(event) > -1) {
+            var registerHandler = handlerMapping[event].bind(this);
+            registerHandler(handler);
+        }
+        else {
+            this.fireError({
+                message: event + ' event does not exist',
+                payload: new Error()
+            });
         }
     };
     Events.prototype.clearAllListeners = function () {

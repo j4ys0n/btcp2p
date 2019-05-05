@@ -3,13 +3,22 @@ import * as crypto from 'crypto';
 import { MessageBuilder } from 'crypto-binary';
 
 import { Events } from '../events/events';
+import { InternalEvents } from '../events/events.internal';
 import { Utils } from '../util/general.util';
 import { MessageHandlers } from './message.handlers';
+import { BlockHandler } from '../blocks/blocks';
+
+import { ProtocolScope } from '../interfaces/peer.interface';
 
 export interface MessageOptions {
   magic: string;
   protocolVersion: number;
-  relayTransactions: boolean;
+  relayTransactions: boolean
+}
+
+interface InternalEventsPackage {
+  events: InternalEvents;
+  socket?: net.Socket;
 }
 
 const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, callback: Function): void => {
@@ -36,7 +45,8 @@ const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
 
 export class Message {
   protected util: Utils = new Utils();
-  protected handlers: MessageHandlers = new MessageHandlers(this.util);
+  protected handlers!: MessageHandlers;
+  protected blockHandler!: BlockHandler;
 
   private magic!: Buffer;
   private magicInt: number = 0;
@@ -85,7 +95,7 @@ export class Message {
    * }
    */
 
-  constructor(private messageOptions: MessageOptions) {
+  constructor(private messageOptions: MessageOptions, private scope: ProtocolScope) {
     this.magic = Buffer.from(this.messageOptions.magic, 'hex');
     try {
       this.magicInt = this.magic.readUInt32LE(0);
@@ -97,9 +107,11 @@ export class Message {
     } else {
       this.relayTransactions = Buffer.from('0x00', 'hex');
     }
+    this.handlers = new MessageHandlers(this.scope, this.util);
+    this.blockHandler = new BlockHandler(this.scope, this.util);
   }
 
-  sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void {
+  sendMessage(command: Buffer, payload: Buffer): void {
     const message = Buffer.concat([
       this.magic,
       command,
@@ -107,10 +119,10 @@ export class Message {
       this.util.sha256d(payload).slice(0,4),
       payload
     ]);
-    socket.write(message);
+    this.scope.socket.write(message);
   }
 
-  sendVersion(events: Events, socket: net.Socket): void {
+  sendVersion(): void {
     // https://en.bitcoin.it/wiki/Protocol_documentation#version
     const payload = Buffer.concat([
       this.util.packUInt32LE(this.messageOptions.protocolVersion),
@@ -123,32 +135,38 @@ export class Message {
       this.blockStartHeight,
       this.relayTransactions
     ]);
-    this.sendMessage(this.commands.version, payload, socket);
-    events.fireSentMessage({command: 'version'});
+    this.sendMessage(this.commands.version, payload);
+    this.scope.events.fire('sent_message', {command: 'version'});
   }
 
-  sendPing(events: Events, socket: net.Socket): void {
+  sendVerack():void {
+    // TODO lets actually check the version here instead of just confirming
+    this.sendMessage(this.commands.verack, Buffer.from([]));
+    this.scope.events.fire('sent_message', {command: 'verack'});
+  }
+
+  sendPing(): void {
     const payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
-    this.sendMessage(this.commands.ping, payload, socket);
-    events.fireSentMessage({command: 'ping'});
+    this.sendMessage(this.commands.ping, payload);
+    this.scope.events.fire('sent_message', {command: 'ping'});
   }
 
-  sendHeaders(payload: Buffer, events: Events, socket: net.Socket): void {
-    this.sendMessage(this.commands.headers, payload, socket);
-    events.fireSentMessage({command: 'headers', payload: {}});
+  sendHeaders(payload: Buffer): void {
+    this.sendMessage(this.commands.headers, payload);
+    this.scope.events.fire('sent_message', {command: 'headers', payload: {}});
   }
 
-  sendGetHeaders(payload: Buffer, events: Events, socket: net.Socket): void {
-    this.sendMessage(this.commands.getheaders, payload, socket);
-    events.fireSentMessage({command: 'getheaders', payload: {}});
+  sendGetHeaders(payload: Buffer): void {
+    this.sendMessage(this.commands.getheaders, payload);
+    this.scope.events.fire('sent_message', {command: 'getheaders', payload: {}});
   }
 
-  sendGetAddr(events: Events, socket: net.Socket): void {
-    this.sendMessage(this.commands.getaddr, Buffer.from([]), socket);
-    events.fireSentMessage({command: 'getaddr', payload: {}});
+  sendGetAddr(): void {
+    this.sendMessage(this.commands.getaddr, Buffer.from([]));
+    this.scope.events.fire('sent_message', {command: 'getaddr', payload: {}});
   }
 
-  sendGetBlocks(events: Events, socket: net.Socket, hash: string): void {
+  sendGetBlocks(hash: string): void {
     const hashCount = Buffer.from([0x01]);
     const headerHashes = Buffer.from(this.util.reverseHexBytes(hash), 'hex');
     const stopHash = Buffer.from(this.util.stopHash(32));
@@ -158,11 +176,11 @@ export class Message {
       headerHashes,
       stopHash
     ]);
-    this.sendMessage(this.commands.getblocks, payload, socket);
-    events.fireSentMessage({command: 'getblocks', payload: {}});
+    this.sendMessage(this.commands.getblocks, payload);
+    this.scope.events.fire('sent_message', {command: 'getblocks', payload: {}});
   }
 
-  sendAddr(events: Events, socket: net.Socket, ip: string, port: number): void {
+  sendAddr(ip: string, port: number): void {
     const count = Buffer.from([0x01]);
     const date = this.util.packUInt32LE(Date.now() / 1000 | 0);
     const host = this.ipTo16ByteBuffer(ip);
@@ -170,11 +188,11 @@ export class Message {
     const payload = Buffer.concat([
       count, date, this.networkServices, host, prt
     ]);
-    this.sendMessage(this.commands.addr, payload, socket);
-    events.fireSentMessage({command: 'getaddr', payload: payload});
+    this.sendMessage(this.commands.addr, payload);
+    this.scope.events.fire('sent_message', {command: 'getaddr', payload: payload});
   }
 
-  sendReject(msg: string, ccode: number, reason: string, extra: string, socket: net.Socket): void {
+  sendReject(msg: string, ccode: number, reason: string, extra: string): void {
     const msgBytes = msg.length
     const reasonBytes = reason.length;
     const extraBytes = extra.length;
@@ -189,24 +207,23 @@ export class Message {
 
     this.sendMessage(
       this.commands.reject,
-      message.buffer,
-      socket
+      message.buffer
     )
   }
 
-  setupMessageParser(events: Events, socket: net.Socket): void {
+  setupMessageParser(): void {
     const beginReadingMessage = (preRead: Buffer) => {
-      readFlowingBytes(socket, 24, preRead, (header: Buffer, lopped: Buffer) => {
+      readFlowingBytes(this.scope.socket, 24, preRead, (header: Buffer, lopped: Buffer) => {
         let msgMagic;
         try {
           msgMagic = header.readUInt32LE(0);
         } catch (e) {
-          events.fireError({message: 'read peer magic failed in setupMessageParser'});
+          this.scope.events.fire('error', {message: 'read peer magic failed in setupMessageParser'});
           return;
         }
 
         if (msgMagic !== this.magicInt) {
-          events.fireError({message: 'bad magic'});
+          this.scope.events.fire('error', {message: 'bad magic'});
           try {
             while (header.readUInt32LE(0) !== this.magicInt && header.length >= 4) {
               header = header.slice(1);
@@ -228,13 +245,13 @@ export class Message {
         const msgLength: number = header.readUInt32LE(16);
         const msgChecksum: number = header.readUInt32LE(20);
         // console.log('--', msgCommand, '--', header);
-        readFlowingBytes(socket, msgLength, lopped, (payload: Buffer, lopped: Buffer) => {
+        readFlowingBytes(this.scope.socket, msgLength, lopped, (payload: Buffer, lopped: Buffer) => {
           if (this.util.sha256d(payload).readUInt32LE(0) !== msgChecksum) {
-            events.fireError({message: 'bad payload - failed checksum'});
+            this.scope.events.fire('error', {message: 'bad payload - failed checksum'});
             // beginReadingMessage(null); // TODO do we need this?
             return;
           }
-          this.handleMessage(msgCommand, payload, events, socket);
+          this.handleMessage(msgCommand, payload);
           beginReadingMessage(lopped);
         });
       });
@@ -253,48 +270,48 @@ export class Message {
     return Buffer.concat(ipv6Padded);
   }
 
-  private handleMessage(command: string, payload: Buffer, events: Events, socket: net.Socket): void {
-    events.firePeerMessage({command: command});
+  private handleMessage(command: string, payload: Buffer): void {
+    this.scope.events.fire('peer_message', {command: command});
     // console.log(payload);
     switch (command) {
       case this.commands.ping.toString():
-        this.handlers.handlePing(payload, events)
+        this.handlers.handlePing(payload)
         .then((ping) => {
           // send pong
-          this.sendMessage(this.commands.pong, ping.nonce, socket);
-          events.fireSentMessage({command: 'pong', payload: {
+          this.sendMessage(this.commands.pong, ping.nonce);
+          this.scope.events.fire('sent_message', {command: 'pong', payload: {
             message: 'nonce: ' + ping.nonce.toString('hex')
           }});
         });
         break;
       case this.commands.pong.toString():
-        this.handlers.handlePong(payload, events);
+        this.handlers.handlePong(payload);
         break;
       case this.commands.inv.toString():
-        this.handlers.handleInv(payload, events);
+        this.handlers.handleInv(payload);
         break;
       case this.commands.addr.toString():
-        this.handlers.handleAddr(payload, events);
+        this.handlers.handleAddr(payload);
         break;
       case this.commands.verack.toString():
-        events.fireVerack(true);
+        this.scope.events.fire('verack', true);
         break;
       case this.commands.version.toString():
-        this.handlers.handleVersion(payload, events)
+        this.handlers.handleVersion(payload)
         .then((version) => {
           // console.log(version);
-          this.sendMessage(this.commands.verack, Buffer.from([]), socket);
-          events.fireSentMessage({command: 'verack'});
+          this.sendVerack();
         });
         break;
       case this.commands.reject.toString():
-        this.handlers.handleReject(payload, events);
+        this.handlers.handleReject(payload);
         break;
       case this.commands.getheaders.toString():
-        this.handlers.handleGetHeaders(payload, events);
+        this.blockHandler.handleGetHeaders(payload);
+
         break;
       case this.commands.headers.toString():
-          this.handlers.handleHeaders(payload, events);
+          this.blockHandler.handleHeaders(payload);
         break;
       default:
         // nothing

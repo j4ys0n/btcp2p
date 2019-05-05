@@ -4,6 +4,9 @@ var crypto = require("crypto");
 var Utils = /** @class */ (function () {
     function Utils() {
     }
+    Utils.prototype.log = function (component, level, message) {
+        console.log('[' + component + '] [' + level + ']\t' + message);
+    };
     Utils.prototype.sha256 = function (buffer) {
         var hash1 = crypto.createHash('sha256');
         hash1.update(buffer);

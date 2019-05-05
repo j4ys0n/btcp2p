@@ -1,8 +1,7 @@
-/// <reference types="node" />
-import * as net from 'net';
-import { Events } from '../events/events';
 import { Utils } from '../util/general.util';
 import { MessageHandlers } from './message.handlers';
+import { BlockHandler } from '../blocks/blocks';
+import { ProtocolScope } from '../interfaces/peer.interface';
 export interface MessageOptions {
     magic: string;
     protocolVersion: number;
@@ -10,8 +9,10 @@ export interface MessageOptions {
 }
 export declare class Message {
     private messageOptions;
+    private scope;
     protected util: Utils;
     protected handlers: MessageHandlers;
+    protected blockHandler: BlockHandler;
     private magic;
     private magicInt;
     private networkServices;
@@ -53,17 +54,18 @@ export declare class Message {
      *  protocolVersion: number,
      * }
      */
-    constructor(messageOptions: MessageOptions);
-    sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void;
-    sendVersion(events: Events, socket: net.Socket): void;
-    sendPing(events: Events, socket: net.Socket): void;
-    sendHeaders(payload: Buffer, events: Events, socket: net.Socket): void;
-    sendGetHeaders(payload: Buffer, events: Events, socket: net.Socket): void;
-    sendGetAddr(events: Events, socket: net.Socket): void;
-    sendGetBlocks(events: Events, socket: net.Socket, hash: string): void;
-    sendAddr(events: Events, socket: net.Socket, ip: string, port: number): void;
-    sendReject(msg: string, ccode: number, reason: string, extra: string, socket: net.Socket): void;
-    setupMessageParser(events: Events, socket: net.Socket): void;
+    constructor(messageOptions: MessageOptions, scope: ProtocolScope);
+    sendMessage(command: Buffer, payload: Buffer): void;
+    sendVersion(): void;
+    sendVerack(): void;
+    sendPing(): void;
+    sendHeaders(payload: Buffer): void;
+    sendGetHeaders(payload: Buffer): void;
+    sendGetAddr(): void;
+    sendGetBlocks(hash: string): void;
+    sendAddr(ip: string, port: number): void;
+    sendReject(msg: string, ccode: number, reason: string, extra: string): void;
+    setupMessageParser(): void;
     private ipTo16ByteBuffer;
     private handleMessage;
 }

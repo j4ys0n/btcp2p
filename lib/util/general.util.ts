@@ -1,6 +1,9 @@
 import * as crypto from 'crypto';
 
 export class Utils {
+  public log(component: string, level: string, message: any) {
+    console.log('['+ component +'] ['+ level +']\t' + message);
+  }
   public sha256(buffer: Buffer): Buffer {
     const hash1 = crypto.createHash('sha256');
     hash1.update(buffer);

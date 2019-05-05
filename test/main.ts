@@ -33,19 +33,29 @@ const integrationTestOptions = {
 };
 
 class BTCP2PTest extends BTCP2P {
-  public clientEvents;
-  public serverEvents;
   public util;
-  public message;
 }
 
 describe('Unit tests', () => {
   let btcp2p: BTCP2PTest;
+  let firstPingDone = false;
   before((done) => {
     btcp2p = new BTCP2PTest(unitTestOptions);
-    btcp2p.serverEvents.onServerStart(() => {
-      btcp2p.serverEvents.clearServerStart();
-      done();
+    let serverStarted = false;
+    let clientConnected = false;
+    const serverStartedAndClientConnected = () => {
+      if (serverStarted && clientConnected) {
+        done();
+      }
+    }
+    btcp2p.server.events.onServerStart(() => {
+      btcp2p.server.events.clearServerStart();
+      serverStarted = true;
+      serverStartedAndClientConnected();
+    });
+    btcp2p.client.events.on('connect', () => {
+      clientConnected = true;
+      serverStartedAndClientConnected();
     })
   });
 
@@ -62,43 +72,48 @@ describe('Unit tests', () => {
 
   describe('events', () => {
     it('should throw error when trying to listen for non-existent event', (done) => {
-      btcp2p.onClient('error', (error) => {
+      btcp2p.client.on('error', (error) => {
         expect(error.message).to.be.equal('badevent event does not exist');
         done();
       });
-      btcp2p.onClient('badevent', (response) => {
+      btcp2p.client.on('badevent', (response) => {
         // should fire error
       })
     });
-    it('client should send event for sent_message when message sent (version)', (done) => {
-      btcp2p.onClient('sent_message', (msg) => {
-        btcp2p.clientEvents.clearSentMessage();
-        expect(msg.command).to.be.equal('version');
-        done();
+    it('client should send event for sent_message when message sent (ping)', (done) => {
+      btcp2p.client.on('sent_message', (msg) => {
+        if (msg.command === 'ping') {
+          // btcp2p.client.events.clearPing();
+          if (!firstPingDone) {
+            expect(msg.command).to.be.equal('ping');
+            firstPingDone = true;
+            done();
+          }
+        }
       });
-      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.client.message.sendPing();
     });
     it('server should send event for peer_message when message received (version)', (done) => {
-      btcp2p.onServer('peer_message', (msg) => {
-        btcp2p.serverEvents.clearPeerMessage();
-        expect(msg.command).to.be.equal(btcp2p.message.commands.version.toString());
+      btcp2p.server.on('peer_message', (msg) => {
+        btcp2p.server.events.clearPeerMessage();
+        expect(msg.command).to.be.equal(btcp2p.server.message.commands.version.toString());
         done();
       });
-      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.client.message.sendVersion();
     });
     it('server should get version when client sends version', (done) => {
-      btcp2p.onServer('version', () => {
-        btcp2p.serverEvents.clearVersion();
+      btcp2p.server.on('version', () => {
+        btcp2p.server.events.clearVersion();
         done();
       });
-      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.client.message.sendVersion();
     });
     it('client should get verack when client sends version', (done) => {
-      btcp2p.onClient('verack', () => {
-        btcp2p.clientEvents.clearVerack();
+      btcp2p.client.on('verack', () => {
+        btcp2p.client.events.clearVerack();
         done();
       });
-      btcp2p.message.sendVersion(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.client.message.sendVersion();
     });
     it('client should fire reject event when server sends reject message', (done) => {
       const msg = 'block';
@@ -107,8 +122,8 @@ describe('Unit tests', () => {
       const reason = 'bad command - malformed'
       const extra = 'asdfghjkl';
 
-      btcp2p.onClient('reject', (rejected: RejectedEvent) => {
-        btcp2p.clientEvents.clearReject();
+      btcp2p.client.on('reject', (rejected: RejectedEvent) => {
+        btcp2p.client.events.clearReject();
         expect(rejected.message).to.be.equal(msg);
         expect(rejected.ccode).to.be.equal(ccode);
         expect(rejected.name).to.be.equal(name);
@@ -117,14 +132,16 @@ describe('Unit tests', () => {
         done();
       });
 
-      btcp2p.message.sendReject(msg, ccode, reason, extra, btcp2p.serverSocket);
+      btcp2p.server.message.sendReject(msg, ccode, reason, extra);
     });
 
     it('server should get ping and client should get pong with matching nonce when client sends ping', (done) => {
       let pingNonce: Buffer;
       let pongNonce: Buffer;
       const checkNonces = () => {
-        if (pingNonce !== undefined && pongNonce !== undefined) {
+        if (pingNonce !== undefined && pongNonce !== undefined && firstPingDone) {
+          btcp2p.server.events.clearPing();
+          btcp2p.server.events.clearPong();
           if (pingNonce.toString('hex') === pongNonce.toString('hex')) {
             done();
           } else {
@@ -132,39 +149,40 @@ describe('Unit tests', () => {
           }
         }
       };
-      btcp2p.onServer('ping', (nonce) => {
-        btcp2p.serverEvents.clearPing();
+      btcp2p.server.on('ping', (nonce) => {
         pingNonce = nonce;
         checkNonces();
       });
-      btcp2p.onClient('pong', (nonce) => {
-        btcp2p.serverEvents.clearPong();
+      btcp2p.client.on('pong', (nonce) => {
         pongNonce = nonce;
         checkNonces();
       });
-      btcp2p.message.sendPing(btcp2p.clientEvents, btcp2p.client);
+      btcp2p.client.message.sendPing();
     });
 
     it('server should get address when client sends address', (done) => {
       const ip = '192.0.2.51';
       const port = unitTestOptions.port;
-      btcp2p.onServer('addr', (payload) => {
-        btcp2p.serverEvents.clearAddr();
+      btcp2p.server.on('addr', (payload) => {
+        btcp2p.server.events.clearAddr();
         // console.log(payload);
         const firstAddr = payload.addresses[0];
         expect(firstAddr.host).to.be.equal(ip);
         expect(firstAddr.port).to.be.equal(port);
         done();
       });
-      btcp2p.message.sendAddr(btcp2p.clientEvents, btcp2p.client, ip, port);
+      btcp2p.client.message.sendAddr(ip, port);
     });
 
   })
 
-  after(() => {
-    btcp2p.client.end();
-    btcp2p.client.destroy();
-    btcp2p.stopServer();
+  after((done) => {
+    btcp2p.client.socket.end();
+    btcp2p.client.socket.destroy();
+    btcp2p.stopServer()
+    .then(() => {
+      done();
+    });
   });
 });
 
@@ -178,30 +196,29 @@ describe('Integration Tests', () => {
   it('should connect to litecoin, request blocks, then disconnect', (done) => {
     btcp2p = new BTCP2PTest(integrationTestOptions);
     let nextHash = '';
-    // btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
+    // btcp2p.client.on('peer_message', (e: PeerMessageEvent) => {
     //   console.log(e);
     // });
-    btcp2p.onClient('block', (e: BlockNotifyEvent) => {
-      btcp2p.clientEvents.clearBlockNotify();
-      console.log(e);
-      expect(e.hash).to.be.equal(nextHash);
-      btcp2p.client.end();
+    btcp2p.client.on('blockinv', (e: any) => {
+      btcp2p.client.events.clearBlockInv();
+      expect(e[0].parsed.hash).to.be.equal(nextHash);
+      btcp2p.client.socket.end();
     });
-    btcp2p.onClient('getheaders', (e: any) => {
-      btcp2p.clientEvents.clearGetHeaders();
-      // console.log(e);
+    btcp2p.client.on('getheaders', (e: any) => {
+      btcp2p.client.events.clearGetHeaders();
       nextHash = e.parsed.hashes[0];
-      btcp2p.message.sendGetBlocks(btcp2p.clientEvents, btcp2p.client, e.parsed.hashes[1]);
-      // done();
+      console.log('requesting:', e.parsed.hashes[1]);
+      console.log('next:', nextHash);
+      btcp2p.client.message.sendGetBlocks(e.parsed.hashes[1]);
     });
-    btcp2p.onClient('connect', (e: ConnectEvent) => {
-      btcp2p.clientEvents.clearConnect();
-      // setTimeout(() => {
-      //   btcp2p.client.end();
-      // }, 2000);
-    });
-    btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
-      btcp2p.clientEvents.clearDisconnect();
+    // btcp2p.client.on('connect', (e: ConnectEvent) => {
+    //   btcp2p.client.events.clearConnect();
+    //   setTimeout(() => {
+    //     btcp2p.client.socket.end();
+    //   }, 2000);
+    // });
+    btcp2p.client.on('disconnect', (e: DisconnectEvent) => {
+      btcp2p.client.events.clearDisconnect();
       done();
     });
   });
@@ -214,17 +231,17 @@ describe('Integration Tests', () => {
   //     console.log(e);
   //   });
   //   btcp2p.onClient('connect', (e: ConnectEvent) => {
-  //     btcp2p.message.sendGetAddr(btcp2p.clientEvents, btcp2p.client);
+  //     btcp2p.message.sendGetAddr(btcp2p.clientEvents, btcp2p.clientSocket);
   //   });
   //   btcp2p.onClient('addr', (e) => {
-  //     btcp2p.client.end();
+  //     btcp2p.clientSocket.end();
   //   })
   //   btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
   //     done();
   //   });
   // });
 
-  after(() => {
-    btcp2p.client.destroy();
-  });
+  // after(() => {
+  //   btcp2p.client.socket.destroy();
+  // });
 });

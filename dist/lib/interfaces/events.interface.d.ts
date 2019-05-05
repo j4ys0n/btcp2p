@@ -1,4 +1,3 @@
-/// <reference types="node" />
 export interface ConnectEvent {
 }
 export interface DisconnectEvent {

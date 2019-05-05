@@ -1,3 +1,5 @@
+import { Utils } from '../util/general.util';
+
 import {
   ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
   SentMessageEvent, PeerMessageEvent, BlockNotifyEvent,
@@ -5,6 +7,19 @@ import {
   AddressEvent
 } from '../interfaces/events.interface';
 
+export interface PropagateEvents {
+  client: boolean;
+  server: boolean;
+}
+
+export interface EventsScope {
+  client: boolean;
+  server: boolean;
+  scopes?: {
+    clientEvents: Events;
+    serverEvents: Events;
+  };
+}
 
 export type Handler<E> = (event: E) => void;
 
@@ -24,14 +39,18 @@ class EventDispatcher<E> {
 }
 
 export class Events {
-  constructor(private server: boolean = false) {
+  private util: Utils = new Utils();
+  private scopedTo: string = ''
+  constructor(protected scope: EventsScope = {client: true, server: false}) {
+    this.scopedTo = (scope.client) ? 'client' : (scope.server) ? 'server' : 'internal';
+    this.util.log('core', 'debug', 'initializing events for ' + this.scopedTo);
   }
   // connect
   private connectDispatcher = new EventDispatcher<ConnectEvent>();
-  public onConnect(handler: Handler<ConnectEvent>): void {
+  private onConnect(handler: Handler<ConnectEvent>): void {
     this.connectDispatcher.register(handler);
   }
-  public fireConnect(event: ConnectEvent): void {
+  private fireConnect(event: ConnectEvent): void {
     this.connectDispatcher.fire(event);
   }
   public clearConnect(): void {
@@ -39,10 +58,10 @@ export class Events {
   }
   // disconnect
   private disconnectDispatcher = new EventDispatcher<DisconnectEvent>();
-  public onDisconnect(handler: Handler<DisconnectEvent>): void {
+  private onDisconnect(handler: Handler<DisconnectEvent>): void {
     this.disconnectDispatcher.register(handler);
   }
-  public fireDisconnect(event: DisconnectEvent): void {
+  private fireDisconnect(event: DisconnectEvent): void {
     this.disconnectDispatcher.fire(event);
   }
   public clearDisconnect(): void {
@@ -50,10 +69,10 @@ export class Events {
   }
   // connection rejected
   private connectionRejectedDispatcher = new EventDispatcher<ConnectionRejectedEvent>();
-  public onConnectionRejected(handler: Handler<ConnectionRejectedEvent>): void {
+  private onConnectionRejected(handler: Handler<ConnectionRejectedEvent>): void {
     this.connectionRejectedDispatcher.register(handler);
   }
-  public fireConnectionRejected(event: ConnectionRejectedEvent): void {
+  private fireConnectionRejected(event: ConnectionRejectedEvent): void {
     this.connectionRejectedDispatcher.fire(event);
   }
   public clearConnectionRejected(): void {
@@ -61,10 +80,10 @@ export class Events {
   }
   // error
   private errorDispatcher = new EventDispatcher<ErrorEvent>();
-  public onError(handler: Handler<ErrorEvent>): void {
+  private onError(handler: Handler<ErrorEvent>): void {
     this.errorDispatcher.register(handler);
   }
-  public fireError(event: ErrorEvent): void {
+  private fireError(event: ErrorEvent): void {
     this.errorDispatcher.fire(event);
   }
   public clearError(): void {
@@ -72,10 +91,10 @@ export class Events {
   }
   // error
   private rejectDispatcher = new EventDispatcher<RejectedEvent>();
-  public onReject(handler: Handler<RejectedEvent>): void {
+  private onReject(handler: Handler<RejectedEvent>): void {
     this.rejectDispatcher.register(handler);
   }
-  public fireReject(event: RejectedEvent): void {
+  private fireReject(event: RejectedEvent): void {
     this.rejectDispatcher.fire(event);
   }
   public clearReject(): void {
@@ -83,10 +102,10 @@ export class Events {
   }
   // message
   private sentMessageDispatcher = new EventDispatcher<SentMessageEvent>();
-  public onSentMessage(handler: Handler<SentMessageEvent>): void {
+  private onSentMessage(handler: Handler<SentMessageEvent>): void {
     this.sentMessageDispatcher.register(handler);
   }
-  public fireSentMessage(event: SentMessageEvent): void {
+  private fireSentMessage(event: SentMessageEvent): void {
     this.sentMessageDispatcher.fire(event);
   }
   public clearSentMessage(): void {
@@ -94,21 +113,32 @@ export class Events {
   }
   // block notify
   private blockNotifyDispatcher = new EventDispatcher<BlockNotifyEvent>();
-  public onBlockNotify(handler: Handler<BlockNotifyEvent>): void {
+  private onBlockNotify(handler: Handler<BlockNotifyEvent>): void {
     this.blockNotifyDispatcher.register(handler);
   }
-  public fireBlockNotify(event: BlockNotifyEvent): void {
+  private fireBlockNotify(event: BlockNotifyEvent): void {
     this.blockNotifyDispatcher.fire(event);
   }
   public clearBlockNotify(): void {
     this.blockNotifyDispatcher.clear();
   }
+  // block inv notify
+  private blockInvDispatcher = new EventDispatcher<Buffer>();
+  private onBlockInv(handler: Handler<Buffer>): void {
+    this.blockInvDispatcher.register(handler);
+  }
+  private fireBlockInv(event: Buffer): void {
+    this.blockInvDispatcher.fire(event);
+  }
+  public clearBlockInv(): void {
+    this.blockInvDispatcher.clear();
+  }
   // tx notify
   private txNotifyDispatcher = new EventDispatcher<TxNotifyEvent>();
-  public onTxNotify(handler: Handler<TxNotifyEvent>): void {
+  private onTxNotify(handler: Handler<TxNotifyEvent>): void {
     this.txNotifyDispatcher.register(handler);
   }
-  public fireTxNotify(event: TxNotifyEvent): void {
+  private fireTxNotify(event: TxNotifyEvent): void {
     this.txNotifyDispatcher.fire(event);
   }
   public clearTxNotify(): void {
@@ -116,10 +146,10 @@ export class Events {
   }
   // peer message
   private peerMessageDispatcher = new EventDispatcher<PeerMessageEvent>();
-  public onPeerMessage(handler: Handler<PeerMessageEvent>): void {
+  private onPeerMessage(handler: Handler<PeerMessageEvent>): void {
     this.peerMessageDispatcher.register(handler);
   }
-  public firePeerMessage(event: PeerMessageEvent): void {
+  private firePeerMessage(event: PeerMessageEvent): void {
     this.peerMessageDispatcher.fire(event);
   }
   public clearPeerMessage(): void {
@@ -127,10 +157,10 @@ export class Events {
   }
   // version message
   private versionDispatcher = new EventDispatcher<VersionEvent>();
-  public onVersion(handler: Handler<VersionEvent>): void {
+  private onVersion(handler: Handler<VersionEvent>): void {
     this.versionDispatcher.register(handler);
   }
-  public fireVersion(event: VersionEvent): void {
+  private fireVersion(event: VersionEvent): void {
     this.versionDispatcher.fire(event);
   }
   public clearVersion(): void {
@@ -138,10 +168,10 @@ export class Events {
   }
   // version message
   private verackDispatcher = new EventDispatcher<Boolean>();
-  public onVerack(handler: Handler<Boolean>): void {
+  private onVerack(handler: Handler<Boolean>): void {
     this.verackDispatcher.register(handler);
   }
-  public fireVerack(event: Boolean): void {
+  private fireVerack(event: Boolean): void {
     this.verackDispatcher.fire(event);
   }
   public clearVerack(): void {
@@ -149,10 +179,10 @@ export class Events {
   }
   // ping
   private pingDispatcher = new EventDispatcher<Buffer>();
-  public onPing(handler: Handler<Buffer>): void {
+  private onPing(handler: Handler<Buffer>): void {
     this.pingDispatcher.register(handler);
   }
-  public firePing(event: Buffer): void {
+  private firePing(event: Buffer): void {
     this.pingDispatcher.fire(event);
   }
   public clearPing(): void {
@@ -160,10 +190,10 @@ export class Events {
   }
   // pong
   private pongDispatcher = new EventDispatcher<Buffer>();
-  public onPong(handler: Handler<Buffer>): void {
+  private onPong(handler: Handler<Buffer>): void {
     this.pongDispatcher.register(handler);
   }
-  public firePong(event: Buffer): void {
+  private firePong(event: Buffer): void {
     this.pongDispatcher.fire(event);
   }
   public clearPong(): void {
@@ -171,10 +201,10 @@ export class Events {
   }
   // addresses received
   private addrDispatcher = new EventDispatcher<AddressEvent>();
-  public onAddr(handler: Handler<AddressEvent>): void {
+  private onAddr(handler: Handler<AddressEvent>): void {
     this.addrDispatcher.register(handler);
   }
-  public fireAddr(event: AddressEvent): void {
+  private fireAddr(event: AddressEvent): void {
     this.addrDispatcher.fire(event);
   }
   public clearAddr(): void {
@@ -182,10 +212,10 @@ export class Events {
   }
   // headers requested (getheaders)
   private getHeadersDispatcher = new EventDispatcher<any>();
-  public onGetHeaders(handler: Handler<any>): void {
+  private onGetHeaders(handler: Handler<any>): void {
     this.getHeadersDispatcher.register(handler);
   }
-  public fireGetHeaders(event: any): void {
+  private fireGetHeaders(event: any): void {
     this.getHeadersDispatcher.fire(event);
   }
   public clearGetHeaders(): void {
@@ -193,10 +223,10 @@ export class Events {
   }
   // headers send (headers)
   private headersDispatcher = new EventDispatcher<any>();
-  public onHeaders(handler: Handler<any>): void {
+  private onHeaders(handler: Handler<any>): void {
     this.headersDispatcher.register(handler);
   }
-  public fireHeaders(event: any): void {
+  private fireHeaders(event: any): void {
     this.headersDispatcher.fire(event);
   }
   public clearHeaders(): void {
@@ -206,72 +236,86 @@ export class Events {
   // server only events
   private serverStartDispatcher = new EventDispatcher<boolean>();
   public onServerStart(handler: Handler<boolean>): void {
-    if (this.server) {
+    if (this.scope.server) {
       this.serverStartDispatcher.register(handler);
     }
   }
   public fireServerStart(event: boolean): void {
-    if (this.server) {
+    if (this.scope.server) {
       this.serverStartDispatcher.fire(event);
     }
   }
   public clearServerStart(): void {
-    if (this.server) {
+    if (this.scope.server) {
       this.serverStartDispatcher.clear();
+    }
+  }
+
+  public fire(event: string, payload: any, propagate?: PropagateEvents): void {
+    const command = (payload.command) ? ' -->' + payload.command : ''
+    this.util.log('core', 'debug', '[' + this.scopedTo + '] firing event for ' + event + command);
+    const triggerMapping = {
+      'connect': this.fireConnect,
+      'connection_rejected': this.fireConnectionRejected,
+      'disconnect': this.fireDisconnect,
+      'version': this.fireVersion,
+      'verack': this.fireVerack,
+      'ping': this.firePing,
+      'pong': this.firePong,
+      'error': this.fireError,
+      'reject': this.fireReject,
+      'block': this.fireBlockNotify,
+      'blockinv': this.fireBlockInv,
+      'tx': this.fireTxNotify,
+      'addr': this.fireAddr,
+      'getheaders': this.fireGetHeaders,
+      'headers': this.fireHeaders,
+      'peer_message': this.firePeerMessage,
+      'sent_message': this.fireSentMessage
+    }
+    const keys = Object.keys(triggerMapping);
+    if (keys.indexOf(event) > -1) {
+      const trigger = triggerMapping[event].bind(this);
+      trigger(payload);
+    } else {
+      this.fireError({
+        message: event + ' event does not exist',
+        payload: new Error()
+      });
     }
   }
 
   // event handlers
   public on(event: string, handler: Handler<any>): void {
-    switch(event) {
-      case 'connect':
-        this.onConnect(handler);
-        break;
-      case 'disconnect':
-        this.onDisconnect(handler);
-        break;
-      case 'version':
-        this.onVersion(handler);
-        break;
-      case 'verack':
-        this.onVerack(handler);
-        break;
-      case 'ping':
-        this.onPing(handler);
-        break;
-      case 'pong':
-        this.onPong(handler);
-        break;
-      case 'error':
-        this.onError(handler);
-        break;
-      case 'reject':
-        this.onReject(handler);
-        break;
-      case 'block':
-        this.onBlockNotify(handler);
-        break;
-      case 'tx':
-        this.onTxNotify(handler);
-        break;
-      case 'addr':
-        this.onAddr(handler);
-        break;
-      case 'getheaders':
-        this.onGetHeaders(handler);
-        break;
-      case 'peer_message':
-        this.onPeerMessage(handler);
-        break;
-      case 'sent_message':
-        this.onSentMessage(handler);
-        break;
-      default:
-        this.fireError({
-          message: event + ' event does not exist',
-          payload: new Error()
-        });
-        break;
+    this.util.log('core', 'debug', '[' + this.scopedTo + '] adding event listener for ' + event);
+    const handlerMapping = {
+      'connect': this.onConnect,
+      'connection_rejected': this.onConnectionRejected,
+      'disconnect': this.onDisconnect,
+      'version': this.onVersion,
+      'verack': this.onVerack,
+      'ping': this.onPing,
+      'pong': this.onPong,
+      'error': this.onError,
+      'reject': this.onReject,
+      'block': this.onBlockNotify,
+      'blockinv': this.onBlockInv,
+      'tx': this.onTxNotify,
+      'addr': this.onAddr,
+      'getheaders': this.onGetHeaders,
+      'headers': this.onHeaders,
+      'peer_message': this.onPeerMessage,
+      'sent_message': this.onSentMessage
+    }
+    const keys = Object.keys(handlerMapping);
+    if (keys.indexOf(event) > -1) {
+      const registerHandler = handlerMapping[event].bind(this);
+      registerHandler(handler);
+    } else {
+      this.fireError({
+        message: event + ' event does not exist',
+        payload: new Error()
+      });
     }
   }
 
