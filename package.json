@@ -32,7 +32,8 @@
   "homepage": "https://github.com/digital-assets-data/btcp2p#readme",
   "dependencies": {
     "@types/node": "^11.11.3",
-    "crypto-binary": "github:j4ys0n/crypto-binary"
+    "crypto-binary": "github:j4ys0n/crypto-binary",
+    "nestdb": "^2.0.0"
   },
   "devDependencies": {
     "tslint": "^5.12.1",
