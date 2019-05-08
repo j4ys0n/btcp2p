@@ -2,7 +2,7 @@ import * as net from 'net';
 import * as crypto from 'crypto';
 import { MessageBuilder } from 'crypto-binary';
 
-import { InternalEvents } from '../events/events.internal';
+import { MessageConsts } from './message.consts';
 import { Utils } from '../util/general.util';
 import { MessageHandlers } from './message.handlers';
 import { BlockHandler } from '../blocks/blocks';
@@ -14,11 +14,6 @@ export interface MessageOptions {
   magic: string;
   protocolVersion: number;
   relayTransactions: boolean
-}
-
-interface InternalEventsPackage {
-  events: InternalEvents;
-  socket?: net.Socket;
 }
 
 const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, callback: Function): void => {
@@ -45,6 +40,7 @@ const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
 
 export class Message {
   protected util: Utils = new Utils();
+  protected messageConsts: MessageConsts = new MessageConsts(this.util);
   protected handlers!: MessageHandlers;
   protected blockHandler!: BlockHandler;
   protected peerHandler!: PeerHandler;
@@ -60,33 +56,7 @@ export class Message {
   //https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
   private relayTransactions: Buffer = Buffer.from('0x00', 'hex'); // false by default
 
-  public commands = {
-    addr: this.util.commandStringBuffer('addr'),
-    alert: this.util.commandStringBuffer('alert'),
-    block: this.util.commandStringBuffer('block'),
-    blocktxn: this.util.commandStringBuffer('blocktxn'),
-    checkorder: this.util.commandStringBuffer('checkorder'),
-    feefilter: this.util.commandStringBuffer('feefilter'),
-    getaddr: this.util.commandStringBuffer('getaddr'),
-    getblocks: this.util.commandStringBuffer('getblocks'),
-    getblocktxn: this.util.commandStringBuffer('getblocktxn'),
-    getdata: this.util.commandStringBuffer('getdata'),
-    getheaders: this.util.commandStringBuffer('getheaders'),
-    headers: this.util.commandStringBuffer('headers'),
-    inv: this.util.commandStringBuffer('inv'),
-    mempool: this.util.commandStringBuffer('mempool'),
-    notfound: this.util.commandStringBuffer('notfound'),
-    ping: this.util.commandStringBuffer('ping'),
-    pong: this.util.commandStringBuffer('pong'),
-    reject: this.util.commandStringBuffer('reject'),
-    reply: this.util.commandStringBuffer('reply'),
-    sendcmpct: this.util.commandStringBuffer('sendcmpct'),
-    sendheaders: this.util.commandStringBuffer('sendheaders'),
-    submitorder: this.util.commandStringBuffer('submitorder'),
-    tx: this.util.commandStringBuffer('tx'),
-    verack: this.util.commandStringBuffer('verack'),
-    version: this.util.commandStringBuffer('version')
-  };
+  public commands = this.messageConsts.commands;
 
   /**
    * @param messageOptions: MessageOptions = {

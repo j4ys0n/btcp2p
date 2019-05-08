@@ -3,9 +3,9 @@ const expect = chai.expect;
 const should = chai.should();
 
 import { BTCP2P } from '../lib/btcp2p';
+import { MessageConsts } from '../lib/message/message.consts';
 import {
-  ConnectEvent, DisconnectEvent, PeerMessageEvent, RejectedEvent,
-  BlockNotifyEvent
+  DisconnectEvent, RejectedEvent
 } from '../lib/interfaces/events.interface'
 
 
@@ -39,8 +39,10 @@ class BTCP2PTest extends BTCP2P {
 describe('Unit tests', () => {
   let btcp2p: BTCP2PTest;
   let firstPingDone = false;
+  let messageConsts: MessageConsts;
   before((done) => {
     btcp2p = new BTCP2PTest(unitTestOptions);
+    messageConsts = new MessageConsts(btcp2p.util);
     let serverStarted = false;
     let clientConnected = false;
     const serverStartedAndClientConnected = () => {
@@ -96,7 +98,7 @@ describe('Unit tests', () => {
     it('server should send event for peer_message when message received (version)', (done) => {
       btcp2p.server.on('peer_message', (msg) => {
         btcp2p.server.events.clearPeerMessage();
-        expect(msg.command).to.be.equal(btcp2p.server.message.commands.version.toString());
+        expect(msg.command).to.be.equal(messageConsts.commands.version.toString());
         done();
       });
       btcp2p.client.message.sendVersion();

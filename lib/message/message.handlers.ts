@@ -25,8 +25,6 @@ export interface Version {
   relay: boolean;
 }
 
-
-
 export class MessageHandlers {
   private blockHandler!: BlockHandler;
   // https://en.bitcoin.it/wiki/Protocol_specification#Inventory_Vectors
