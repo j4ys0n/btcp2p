@@ -35,7 +35,7 @@ const unitTestOptions = {
 
 const integrationTestOptionsBTC = {
   name: 'bitcoin',
-  host: '34.207.89.35',
+  host: 'localhost',
   port: 8333,
   startServer: false,
   relayTransactions: false,
