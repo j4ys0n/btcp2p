@@ -27,7 +27,7 @@ const addListeners = (btcp2p: BTCP2P) => {
     console.log({type: 'error', text: e.message});
   });
 
-  btcp2p.client.on('block', (e: BlockNotifyEvent) => {
+  btcp2p.client.on('block', (e: Block | BlockZcash) => {
     const msg = 'block: ' + e.hash;
     console.log(msg);
   });
