@@ -1,8 +1,18 @@
 import * as crypto from 'crypto';
 
+const LOG_LEVELS = {
+  'debug': 0,
+  'info': 1,
+  'warn': 2,
+  'error': 3
+}
+
 export class Utils {
+  public logLevel = 1;
   public log(component: string, level: string, message: any) {
-    console.log('['+ component +'] ['+ level +']\t' + message);
+    if (LOG_LEVELS[level] >= this.logLevel) {
+      console.log('['+ component +'] ['+ level +']\t' + message);
+    }
   }
   public sha256(buffer: Buffer): Buffer {
     const hash1 = crypto.createHash('sha256');
