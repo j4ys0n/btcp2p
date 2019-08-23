@@ -8,7 +8,7 @@ import {
 } from '../interfaces/events.interface';
 
 import {
-  Block, BlockZcash
+  Block, BlockZcash, BlockInv
 } from '../interfaces/blocks.interface'
 
 export interface EventsScope {
@@ -122,11 +122,11 @@ export class Events {
     this.blockDispatcher.clear();
   }
   // block inv notify
-  private blockInvDispatcher = new EventDispatcher<Buffer>();
-  private onBlockInv(handler: Handler<Buffer>): void {
+  private blockInvDispatcher = new EventDispatcher<BlockInv>();
+  private onBlockInv(handler: Handler<BlockInv>): void {
     this.blockInvDispatcher.register(handler);
   }
-  private fireBlockInv(event: Buffer): void {
+  private fireBlockInv(event: BlockInv): void {
     this.blockInvDispatcher.fire(event);
   }
   public clearBlockInv(): void {
