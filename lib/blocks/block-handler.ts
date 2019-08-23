@@ -56,7 +56,9 @@ export class BlockHandler {
     const txes: Array<BitcoinTransaction | ZcashTransaction> = this.transactionParser.parseTransactions(p);
     const block: Block | BlockZcash = {...blockHeader, ...{transactions: txes}};
     this.scope.events.fire('block', block);
-    this.blocks.updateBlockList(block);
+    if (!this.options.skipBlockDownload) {
+      this.blocks.updateBlockList(block);
+    }
     // TODO
     // save block to db (parsed and raw) if prevBlock matches actual prev block..
     // if prevBlock does notmatch prev block, keep going back, maybe reorg.
