@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var net = require("net");
 // class imports
 var events_1 = require("./events/events");
-var events_internal_1 = require("./events/events.internal");
 var general_util_1 = require("./util/general.util");
+var db_util_1 = require("./util/db.util");
 var message_1 = require("./message/message");
 // testing flag
 var ENV = process.env.NODE_ENV;
@@ -24,6 +24,7 @@ var BTCP2P = /** @class */ (function () {
      *  serverPort: number,
      *  startServer: boolean,
      *  protocolVersion: number,
+     *  protocol: string,
      *  persist: boolean
      * }
      */
@@ -32,6 +33,7 @@ var BTCP2P = /** @class */ (function () {
         this.options = options;
         this.serverStarting = false;
         this.serverStarted = false;
+        this.supportedProtocols = ['bitcoin', 'zcash'];
         // separate scope package for client, server and internal
         this.clientEvents = new events_1.Events({ client: true, server: false });
         this.client = {
@@ -39,7 +41,12 @@ var BTCP2P = /** @class */ (function () {
             on: this.clientEvents.on.bind(this.clientEvents),
             socket: this.clientSocket,
             message: this.message,
-            connected: false
+            connected: false,
+            shared: {
+                externalHeight: 0,
+                internalHeight: 0,
+                synced: false
+            }
         };
         this.serverEvents = new events_1.Events({ client: false, server: true });
         this.server = {
@@ -47,31 +54,17 @@ var BTCP2P = /** @class */ (function () {
             on: this.serverEvents.on.bind(this.serverEvents),
             socket: this.serverSocket,
             message: this.message,
-            connected: false
-        };
-        this.internalEvents = new events_internal_1.InternalEvents({
-            client: false,
-            server: false,
-            scopes: {
-                clientEvents: this.clientEvents,
-                serverEvents: this.serverEvents
+            connected: false,
+            shared: {
+                externalHeight: 0,
+                internalHeight: 0,
+                synced: false
             }
-        });
-        this.internal = {
-            events: this.internalEvents,
-            on: this.internalEvents.on.bind(this.internalEvents),
-            socket: this.serverSocket,
-            message: this.message,
-            connected: false
         };
-        // protected internalServerEvents: Events = new Events(true);
-        // expose events to listen to for client and server
-        // public onClient: Events['on'] = this.clientEvents.on.bind(this.clientEvents);
-        // public onServer: Events['on'] = this.serverEvents.on.bind(this.serverEvents);
         this.util = new general_util_1.Utils();
+        this.dbUtil = new db_util_1.DbUtil();
         this.pingInterval = 5 * MINUTE;
         // if the remote peer acknowledges the version (verack), it can be considered connected
-        this.internalScopeInit = false;
         this.serverScopeInit = false;
         this.clientScopeInit = false;
         this.rejectedRetryPause = MINUTE; // on disctonnect/reject
@@ -83,6 +76,9 @@ var BTCP2P = /** @class */ (function () {
         }
         else {
             this.serverPort = this.options.port;
+        }
+        if (this.supportedProtocols.indexOf(this.options.protocol) === -1) {
+            throw new Error('protocol must be one of: ' + this.supportedProtocols.join(', '));
         }
         this.util.log('core', 'info', 'server port: ' + this.serverPort);
         this.clientEvents.on('connection_rejected', function (event) {
@@ -99,8 +95,8 @@ var BTCP2P = /** @class */ (function () {
             this.serverInstance = net.createServer(function (socket) {
                 _this.util.log('core', 'debug', 'server created');
                 _this.serverSocket = socket;
-                _this.initInternalScope(_this.serverSocket);
                 _this.initServerScope(_this.serverSocket);
+                // this.initInternalScope(this.serverSocket);
             });
             this.startServer()
                 .then(function () {
@@ -132,31 +128,30 @@ var BTCP2P = /** @class */ (function () {
             }
         });
     };
-    BTCP2P.prototype.initInternalScope = function (socket) {
-        // if (!this.internalScopeInit) {
-        //   this.internalScopeInit = true;
-        //   this.util.log('core', 'debug', 'initializing internal message & event handling');
-        //   this.internal.socket = socket;
-        //   this.internal.message = new Message({
-        //     magic: this.options.peerMagic,
-        //     protocolVersion: this.options.protocolVersion,
-        //     relayTransactions: this.options.relayTransactions
-        //   }, this.internal);
-        //   this.internal.message.setupMessageParser();
-        // } else {
-        //   this.util.log('core', 'debug', 'internal message & event handling already instantiated');
-        // }
+    BTCP2P.prototype.startBlockFetch = function () {
+        var _this = this;
+        this.getInternalBlockHeight()
+            .then(function (block) {
+            _this.util.log('core', 'info', 'best block: ' + JSON.stringify(block));
+            _this.client.message.blockHandler.blocks.startFetch(block);
+            return;
+        });
+    };
+    BTCP2P.prototype.getInternalBlockHeight = function () {
+        var _this = this;
+        return this.dbUtil.getBestBlockHeight(this.options.name)
+            .then(function (block) {
+            _this.server.shared.internalHeight = block.height;
+            _this.client.shared.internalHeight = block.height;
+            return Promise.resolve(block);
+        });
     };
     BTCP2P.prototype.initServerScope = function (socket) {
         if (!this.serverScopeInit) {
             this.serverScopeInit = true;
             this.util.log('core', 'debug', 'initializing server message & event handling');
             this.server.socket = socket;
-            this.server.message = new message_1.Message({
-                magic: this.options.peerMagic,
-                protocolVersion: this.options.protocolVersion,
-                relayTransactions: this.options.relayTransactions
-            }, this.server);
+            this.server.message = new message_1.Message(this.options, this.server);
             this.server.message.setupMessageParser();
             this.initEventHandlers(this.server);
         }
@@ -169,11 +164,7 @@ var BTCP2P = /** @class */ (function () {
             this.clientScopeInit = true;
             this.util.log('core', 'debug', 'initializing client message & event handling');
             this.client.socket = socket;
-            this.client.message = new message_1.Message({
-                magic: this.options.peerMagic,
-                protocolVersion: this.options.protocolVersion,
-                relayTransactions: this.options.relayTransactions
-            }, this.client);
+            this.client.message = new message_1.Message(this.options, this.client);
             this.client.message.setupMessageParser();
             this.initEventHandlers(this.client);
         }
@@ -199,8 +190,8 @@ var BTCP2P = /** @class */ (function () {
             if (response.success) {
                 _this.util.log('core', 'info', 'client connection successful');
                 _this.clientSocket = response.socket;
-                _this.initInternalScope(_this.clientSocket);
                 _this.initClientScope(_this.clientSocket);
+                // this.initInternalScope(this.clientSocket);
                 _this.client.message.sendVersion();
             }
         });
@@ -271,12 +262,13 @@ var BTCP2P = /** @class */ (function () {
             if (!scope.connected) {
                 scope.connected = true;
                 scope.events.fire('connect', {});
+                _this.startBlockFetch();
             }
         });
         scope.events.on('getheaders', function (payload) {
             if (!_this.headers) {
                 _this.waitingForHeaders = true;
-                scope.message.sendGetHeaders(payload.raw);
+                // scope.message.sendGetHeaders(payload.raw);
             }
             else {
                 scope.message.sendHeaders(_this.headers);
@@ -286,7 +278,14 @@ var BTCP2P = /** @class */ (function () {
             if (_this.waitingForHeaders) {
                 _this.headers = payload.raw;
                 _this.waitingForHeaders = false;
-                scope.message.sendHeaders(payload.raw);
+                // scope.message.sendHeaders(payload.raw);
+                // scope.message.sendHeaders(
+                //   Buffer.from([
+                //     0x04000000,
+                //     0x0000000000000000000000000000000000000000000000000000000000000000,
+                //     0x2318b72b4e35d86f0c66c8c956fe7c3ae1ef7c33b835c58fdd9a1ed5f2b4852a,
+                //   ])
+                // )
             }
             else {
                 _this.headers = payload.raw;

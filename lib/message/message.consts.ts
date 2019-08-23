@@ -19,6 +19,7 @@ export class MessageConsts {
     headers: this.util.commandStringBuffer('headers'), // returns block headers from getheaders
     inv: this.util.commandStringBuffer('inv'), // received unsolicided (new blocks/txes) or in response to getblocks
     mempool: this.util.commandStringBuffer('mempool'), // ask peer for txes that have been verified but not confirmed
+    merkleblock: this.util.commandStringBuffer('merkleblock'),
     notfound: this.util.commandStringBuffer('notfound'), // request from getdata not found
     ping: this.util.commandStringBuffer('ping'), // send pong
     pong: this.util.commandStringBuffer('pong'), // ping has been received
@@ -30,5 +31,17 @@ export class MessageConsts {
     tx: this.util.commandStringBuffer('tx'), // send or receive transaction
     verack: this.util.commandStringBuffer('verack'), // acknowledge version (part of handshake)
     version: this.util.commandStringBuffer('version') // send or receive version (part of handshake)
+  }
+
+  // https://en.bitcoin.it/wiki/Protocol_documentation#reject
+  public rejectCodes = {
+    1: 'REJECT_MALFORMED',
+    10: 'REJECT_INVALID',
+    11: 'REJECT_OBSOLETE',
+    12: 'REJECT_DUPLICATE',
+    40: 'REJECT_NONSTANDARD',
+    41: 'REJECT_DUST',
+    42: 'REJECT_INSUFFICIENTFEE',
+    43: 'REJECT_CHECKPOINT'
   }
 }

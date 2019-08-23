@@ -3,14 +3,9 @@ import { Utils } from '../util/general.util';
 import {
   ConnectEvent, DisconnectEvent, ConnectionRejectedEvent,
   SentMessageEvent, PeerMessageEvent, BlockNotifyEvent,
-  TxNotifyEvent, ErrorEvent, VersionEvent, RejectedEvent,
+  TxEvent, TxInvEvent, ErrorEvent, VersionEvent, RejectedEvent,
   AddressEvent
 } from '../interfaces/events.interface';
-
-export interface PropagateEvents {
-  client: boolean;
-  server: boolean;
-}
 
 export interface EventsScope {
   client: boolean;
@@ -112,15 +107,15 @@ export class Events {
     this.sentMessageDispatcher.clear();
   }
   // block notify
-  private blockNotifyDispatcher = new EventDispatcher<BlockNotifyEvent>();
-  private onBlockNotify(handler: Handler<BlockNotifyEvent>): void {
-    this.blockNotifyDispatcher.register(handler);
+  private blockDispatcher = new EventDispatcher<BlockNotifyEvent>();
+  private onBlock(handler: Handler<BlockNotifyEvent>): void {
+    this.blockDispatcher.register(handler);
   }
-  private fireBlockNotify(event: BlockNotifyEvent): void {
-    this.blockNotifyDispatcher.fire(event);
+  private fireBlock(event: BlockNotifyEvent): void {
+    this.blockDispatcher.fire(event);
   }
-  public clearBlockNotify(): void {
-    this.blockNotifyDispatcher.clear();
+  public clearBlock(): void {
+    this.blockDispatcher.clear();
   }
   // block inv notify
   private blockInvDispatcher = new EventDispatcher<Buffer>();
@@ -134,15 +129,26 @@ export class Events {
     this.blockInvDispatcher.clear();
   }
   // tx notify
-  private txNotifyDispatcher = new EventDispatcher<TxNotifyEvent>();
-  private onTxNotify(handler: Handler<TxNotifyEvent>): void {
-    this.txNotifyDispatcher.register(handler);
+  private txDispatcher = new EventDispatcher<TxEvent>();
+  private onTx(handler: Handler<TxEvent>): void {
+    this.txDispatcher.register(handler);
   }
-  private fireTxNotify(event: TxNotifyEvent): void {
-    this.txNotifyDispatcher.fire(event);
+  private fireTx(event: TxEvent): void {
+    this.txDispatcher.fire(event);
   }
-  public clearTxNotify(): void {
-    this.txNotifyDispatcher.clear();
+  public clearTx(): void {
+    this.txDispatcher.clear();
+  }
+  // tx inv notify
+  private txInvDispatcher = new EventDispatcher<TxEvent>();
+  private onTxInv(handler: Handler<TxEvent>): void {
+    this.txInvDispatcher.register(handler);
+  }
+  private fireTxInv(event: TxEvent): void {
+    this.txInvDispatcher.fire(event);
+  }
+  public clearTxInv(): void {
+    this.txInvDispatcher.clear();
   }
   // peer message
   private peerMessageDispatcher = new EventDispatcher<PeerMessageEvent>();
@@ -233,6 +239,18 @@ export class Events {
     this.headersDispatcher.clear();
   }
 
+  // not found
+  private notFoundDispatcher = new EventDispatcher<any>();
+  private onNotFound(handler: Handler<any>): void {
+    this.notFoundDispatcher.register(handler);
+  }
+  public fireNotFound(event: any): void {
+    this.notFoundDispatcher.fire(event);
+  }
+  private clearNotFound(): void {
+    this.notFoundDispatcher.clear();
+  }
+
   // server only events
   private serverStartDispatcher = new EventDispatcher<boolean>();
   public onServerStart(handler: Handler<boolean>): void {
@@ -251,7 +269,7 @@ export class Events {
     }
   }
 
-  public fire(event: string, payload: any, propagate?: PropagateEvents): void {
+  public fire(event: string, payload: any): void {
     const command = (payload.command) ? ' -->' + payload.command : ''
     this.util.log('core', 'debug', '[' + this.scopedTo + '] firing event for ' + event + command);
     const triggerMapping = {
@@ -264,14 +282,16 @@ export class Events {
       'pong': this.firePong,
       'error': this.fireError,
       'reject': this.fireReject,
-      'block': this.fireBlockNotify,
+      'block': this.fireBlock,
       'blockinv': this.fireBlockInv,
-      'tx': this.fireTxNotify,
+      'tx': this.fireTx,
+      'txinv': this.fireTxInv,
       'addr': this.fireAddr,
       'getheaders': this.fireGetHeaders,
       'headers': this.fireHeaders,
       'peer_message': this.firePeerMessage,
-      'sent_message': this.fireSentMessage
+      'sent_message': this.fireSentMessage,
+      'notfound': this.fireNotFound
     }
     const keys = Object.keys(triggerMapping);
     if (keys.indexOf(event) > -1) {
@@ -298,14 +318,16 @@ export class Events {
       'pong': this.onPong,
       'error': this.onError,
       'reject': this.onReject,
-      'block': this.onBlockNotify,
+      'block': this.onBlock,
       'blockinv': this.onBlockInv,
-      'tx': this.onTxNotify,
+      'tx': this.onTx,
+      'txinv': this.onTxInv,
       'addr': this.onAddr,
       'getheaders': this.onGetHeaders,
       'headers': this.onHeaders,
       'peer_message': this.onPeerMessage,
-      'sent_message': this.onSentMessage
+      'sent_message': this.onSentMessage,
+      'notfound': this.onNotFound
     }
     const keys = Object.keys(handlerMapping);
     if (keys.indexOf(event) > -1) {
@@ -328,11 +350,12 @@ export class Events {
     this.clearPong();
     this.clearError();
     this.clearReject();
-    this.clearBlockNotify();
-    this.clearTxNotify();
+    this.clearBlock();
+    this.clearTx();
     this.clearAddr();
     this.clearGetHeaders();
     this.clearPeerMessage();
     this.clearSentMessage();
+    this.clearNotFound();
   }
 }

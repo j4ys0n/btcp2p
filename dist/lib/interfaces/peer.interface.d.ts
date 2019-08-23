@@ -3,14 +3,22 @@ import { Events } from '../events/events';
 import { Message } from '../message/message';
 export interface StartOptions {
     name: string;
-    peerMagic: string;
+    magic: string;
     relayTransactions: boolean;
     host: string;
     port: number;
     serverPort?: number;
     startServer?: boolean;
     protocolVersion: number;
+    protocol: string;
+    genesisTarget: string;
+    genesisHash: string;
     persist: boolean;
+}
+export interface Shared {
+    externalHeight: number;
+    internalHeight: number;
+    synced: boolean;
 }
 export interface ProtocolScope {
     events: Events;
@@ -18,6 +26,7 @@ export interface ProtocolScope {
     socket: net.Socket;
     message: Message;
     connected: boolean;
+    shared: Shared;
 }
 export interface PeerAddress {
     hostRaw: Buffer;

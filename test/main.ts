@@ -2,34 +2,74 @@ import chai = require('chai');
 const expect = chai.expect;
 const should = chai.should();
 
+import { MessageParser } from 'crypto-binary';
+
 import { BTCP2P } from '../lib/btcp2p';
 import { MessageConsts } from '../lib/message/message.consts';
 import {
-  DisconnectEvent, RejectedEvent
+  DisconnectEvent, RejectedEvent, PeerMessageEvent, HeadersEvent
 } from '../lib/interfaces/events.interface'
 
+import { TransactionParser } from '../lib/transactions/transaction-parser';
+import { Utils } from '../lib/util/general.util';
 
 const unitTestOptions = {
-  name: 'litecoin',
-  peerMagic: 'fbc0b6db',
-  relayTransactions: false,
+  name: 'arrow',
   host: 'localhost',
   port: 3003,
   serverPort: 3003,
   startServer: true,
-  protocolVersion: 70015,
-  persist: false
+  relayTransactions: false,
+  persist: false,
+  fetchMempool: false,
+  network: {
+    protocol: 'zcash',
+    magic: '27a2261c',
+    genesisTarget: '1f07ffff',
+    genesisHash: '00028de97cd7b8e1b90918186387c0e6b9f65ac433bdde036aa93e184593da4e',
+    protocolVersion: 170007,
+    pubKeyVersion: 0,
+    scriptVersion: 5
+  }
 };
 
-const integrationTestOptions = {
-  name: 'litecoin',
-  peerMagic: 'fbc0b6db',
-  relayTransactions: false,
-  host: '34.201.114.34',
-  port: 9333,
+const integrationTestOptionsBTC = {
+  name: 'bitcoin',
+  host: '34.207.89.35',
+  port: 8333,
   startServer: false,
-  protocolVersion: 70015,
-  persist: false
+  relayTransactions: false,
+  persist: false,
+  fetchMempool: false,
+  skipBlockDownload: true,
+  network: {
+    protocol: 'bitcoin',
+    magic: 'f9beb4d9',
+    genesisTarget: '1d00ffff',
+    genesisHash: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
+    protocolVersion: 170001,
+    pubKeyVersion: 0,
+    scriptVersion: 5
+  }
+};
+
+const integrationTestOptionsARW = {
+  name: 'arrow',
+  host: 'localhost',
+  port: 7654,
+  startServer: false,
+  relayTransactions: false,
+  persist: false,
+  fetchMempool: false,
+  network: {
+    protocol: 'zcash',
+    magic: '27a2261c',
+    genesisTarget: '1f07ffff',
+    genesisHash: '00028de97cd7b8e1b90918186387c0e6b9f65ac433bdde036aa93e184593da4e',
+    protocolVersion: 170007,
+    pubKeyVersion: 0,
+    scriptVersion: 5
+  }
 };
 
 class BTCP2PTest extends BTCP2P {
@@ -75,6 +115,7 @@ describe('Unit tests', () => {
   describe('events', () => {
     it('should throw error when trying to listen for non-existent event', (done) => {
       btcp2p.client.on('error', (error) => {
+        btcp2p.client.events.clearError();
         expect(error.message).to.be.equal('badevent event does not exist');
         done();
       });
@@ -162,6 +203,16 @@ describe('Unit tests', () => {
       btcp2p.client.message.sendPing();
     });
 
+    it('should decode a transaction', (done) => {
+      const utils = new Utils();
+      const txparser = new TransactionParser(utils, integrationTestOptions)
+      const p = new MessageParser(Buffer.from('0100000001baa5ec1b07ab16b8c1b55b27d703e012f59693ff1ffddc91a6e4502bb38ad85b0100000000ffffffff01c0a1fc53020000001976a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088aca8f80800', 'hex'));
+      const txes = txparser.parseBitcoinTransactions(p, 1)
+      // console.log(txes);
+      expect(txes[0].txOut[0].pkScript).to.be.equal('76a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088ac');
+      done();
+    })
+
     it('server should get address when client sends address', (done) => {
       const ip = '192.0.2.51';
       const port = unitTestOptions.port;
@@ -195,24 +246,36 @@ describe('Integration Tests', () => {
   //   done();
   // })
 
-  it('should connect to litecoin, request blocks, then disconnect', (done) => {
-    btcp2p = new BTCP2PTest(integrationTestOptions);
+  it('should connect to arrowd, request blocks, then disconnect', (done) => {
+    btcp2p = new BTCP2PTest(integrationTestOptionsBTC);
     let nextHash = '';
-    // btcp2p.client.on('peer_message', (e: PeerMessageEvent) => {
-    //   console.log(e);
-    // });
+    btcp2p.client.on('peer_message', (e: PeerMessageEvent) => {
+      console.log('peer_message', e);
+    });
+    btcp2p.client.on('sent_message', (e: PeerMessageEvent) => {
+      console.log('sent_message', e);
+    });
+    btcp2p.client.on('error', (e: any) => {
+      console.log(e)
+    })
     btcp2p.client.on('blockinv', (e: any) => {
       btcp2p.client.events.clearBlockInv();
-      expect(e[0].parsed.hash).to.be.equal(nextHash);
-      btcp2p.client.socket.end();
+      // console.log(e)
+      // expect(e[0].parsed.hash).to.be.equal(nextHash);
+      // btcp2p.client.socket.end();
     });
     btcp2p.client.on('getheaders', (e: any) => {
       btcp2p.client.events.clearGetHeaders();
       nextHash = e.parsed.hashes[0];
       console.log('requesting:', e.parsed.hashes[1]);
       console.log('next:', nextHash);
-      btcp2p.client.message.sendGetBlocks(e.parsed.hashes[1]);
+      // btcp2p.client.message.sendGetBlocks(e.parsed.hashes[1]);
+      // btcp2p.client.message.sendGetBlocks('000546eeffe7cc9daa9e69a21d1b0ee50953748a4d788f690de9ecff4494b838')
     });
+    btcp2p.client.on('headers', (e: HeadersEvent) => {
+      console.log('headers')
+      console.log(e)
+    })
     // btcp2p.client.on('connect', (e: ConnectEvent) => {
     //   btcp2p.client.events.clearConnect();
     //   setTimeout(() => {
@@ -221,8 +284,24 @@ describe('Integration Tests', () => {
     // });
     btcp2p.client.on('disconnect', (e: DisconnectEvent) => {
       btcp2p.client.events.clearDisconnect();
-      done();
+      setTimeout(() => {
+        done();
+      }, 3000);
     });
+    btcp2p.client.on('block', (e: any) => {
+      // console.log(e)
+    })
+
+    btcp2p.client.on('connect', (e: any) => {
+      // btcp2p.client.message.sendMessage(
+      //   btcp2p.client.message.commands.mempool,
+      //   Buffer.from([])
+      // )
+      console.log('** connected!')
+      setTimeout(() => {
+        btcp2p.client.socket.end();
+      }, 10000)
+    })
   });
 
 

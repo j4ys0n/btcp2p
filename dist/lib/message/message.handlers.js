@@ -1,11 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto_binary_1 = require("crypto-binary");
-var blocks_1 = require("../blocks/blocks");
+var block_handler_1 = require("../blocks/block-handler");
+var transactions_1 = require("../transactions/transactions");
 var MessageHandlers = /** @class */ (function () {
-    function MessageHandlers(scope, util) {
+    function MessageHandlers(scope, util, dbUtil, options) {
         this.scope = scope;
         this.util = util;
+        this.dbUtil = dbUtil;
+        this.options = options;
         // https://en.bitcoin.it/wiki/Protocol_specification#Inventory_Vectors
         this.invCodes = {
             error: 0,
@@ -25,7 +28,8 @@ var MessageHandlers = /** @class */ (function () {
             42: 'REJECT_INSUFFICIENTFEE',
             43: 'REJECT_CHECKPOINT'
         };
-        this.blockHandler = new blocks_1.BlockHandler(this.scope, this.util);
+        this.blockHandler = new block_handler_1.BlockHandler(this.scope, this.util, this.dbUtil, this.options);
+        this.transactions = new transactions_1.Transactions(this.scope, this.util, this.dbUtil, this.options);
     }
     MessageHandlers.prototype.handlePing = function (payload) {
         var nonce = this.parseNonce(payload);
@@ -71,6 +75,7 @@ var MessageHandlers = /** @class */ (function () {
             height: s.readUInt32LE(),
             relay: Boolean(s.raw(1))
         };
+        this.scope.shared.externalHeight = parsed.height;
         if (parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
             parsed.time = new Date(parsed.time.readUInt32LE(0) * 1000);
         }
@@ -100,12 +105,10 @@ var MessageHandlers = /** @class */ (function () {
                     console.log('error, you can ignore this');
                     break;
                 case this.invCodes.tx:
-                    var tx = payload.slice(4, 36).toString('hex');
-                    this.scope.events.fire('tx', { hash: tx });
+                    this.transactions.handleTransactionInv(payload);
                     break;
                 case this.invCodes.block:
                     this.blockHandler.handleBlockInv(payload);
-                    // this.scope.events.fire('blockinv', payload);
                     break;
                 case this.invCodes.blockFiltered:
                     var fBlock = payload.slice(4, 36).reverse().toString('hex');

@@ -2,31 +2,24 @@ import { MessageParser } from 'crypto-binary';
 
 // class imports
 import { Utils } from '../util/general.util';
-import { BlockHandler } from '../blocks/blocks';
+import { DbUtil } from '../util/db.util';
+import { BlockHandler } from '../blocks/block-handler';
+import { MessageConsts } from './message.consts';
+import { TransactionHandler } from '../transactions/transaction-handler';
 
 // interface imports
 import { RejectedEvent } from '../interfaces/events.interface';
-import { ProtocolScope } from '../interfaces/peer.interface';
+import { StartOptions, ProtocolScope, Version } from '../interfaces/peer.interface';
 
 
 export interface Nonce {
   nonce: Buffer;
 }
 
-export interface Version {
-  version: number;
-  services: number;
-  time: any;
-  addr_recv: string;
-  addr_from: string;
-  nonce: string;
-  client: string;
-  height: number;
-  relay: boolean;
-}
-
 export class MessageHandlers {
-  private blockHandler!: BlockHandler;
+  public blockHandler: BlockHandler;
+  private messageConsts: MessageConsts;
+  private transactionHandler: TransactionHandler;
   // https://en.bitcoin.it/wiki/Protocol_specification#Inventory_Vectors
   protected invCodes = {
     error: 0,
@@ -35,20 +28,16 @@ export class MessageHandlers {
     blockFiltered: 3,
     blockCompact: 4
   };
-  // https://en.bitcoin.it/wiki/Protocol_documentation#reject
-  protected rejectCodes = {
-    1: 'REJECT_MALFORMED',
-    10: 'REJECT_INVALID',
-    11: 'REJECT_OBSOLETE',
-    12: 'REJECT_DUPLICATE',
-    40: 'REJECT_NONSTANDARD',
-    41: 'REJECT_DUST',
-    42: 'REJECT_INSUFFICIENTFEE',
-    43: 'REJECT_CHECKPOINT'
-  }
 
-  constructor(private scope: ProtocolScope, private util: Utils) {
-    this.blockHandler = new BlockHandler(this.scope, this.util)
+  constructor(
+    private scope: ProtocolScope,
+    private util: Utils,
+    private dbUtil: DbUtil,
+    private options: StartOptions
+  ) {
+    this.blockHandler = new BlockHandler(this.scope, this.util, this.dbUtil, this.options);
+    this.messageConsts = new MessageConsts(this.util);
+    this.transactionHandler = new TransactionHandler(this.scope, this.util, this.dbUtil, this.options)
   }
 
   handlePing(payload: Buffer): Promise<Nonce> {
@@ -68,7 +57,7 @@ export class MessageHandlers {
     const messageLen = p.readInt8();
     const message = p.raw(messageLen).toString();
     const ccode = p.readInt8();
-    const name = this.rejectCodes[ccode];
+    const name = this.messageConsts.rejectCodes[ccode];
     const reasonLen = p.readInt8();
     const reason = p.raw(reasonLen).toString();
     const extraLen = (p.buffer.length -1) - (p.pointer -1);
@@ -129,12 +118,10 @@ export class MessageHandlers {
           console.log('error, you can ignore this');
           break;
         case this.invCodes.tx:
-          let tx = payload.slice(4, 36).toString('hex');
-          this.scope.events.fire('tx', {hash: tx});
+          this.transactionHandler.handleTransactionInv(payload);
           break;
         case this.invCodes.block:
           this.blockHandler.handleBlockInv(payload);
-          // this.scope.events.fire('blockinv', payload);
           break;
         case this.invCodes.blockFiltered:
           let fBlock = payload.slice(4, 36).reverse().toString('hex');
@@ -158,5 +145,37 @@ export class MessageHandlers {
       nonce = Buffer.from([]);
     }
     return nonce;
+  }
+
+  handleNotFound(payload: Buffer): void {
+    let count = payload.readUInt8(0);
+    payload = payload.slice(1);
+    if (count >= 0xfd) {
+      count = payload.readUInt16LE(0);
+      payload = payload.slice(2);
+    }
+    let type;
+    let hash;
+    const mp = new MessageParser(payload)
+    try {
+      type = mp.readUInt32LE(0);
+    } catch (e) {
+
+    }
+    let object = {
+      count,
+      type
+    }
+    switch (type) {
+      case this.invCodes.tx:
+        hash = mp.raw(32).reverse().toString('hex')
+        object['hash'] = hash
+        break;
+      case this.invCodes.block:
+        hash = mp.raw(32).reverse().toString('hex')
+        object['hash'] = hash
+        break;
+    }
+    this.scope.events.fireNotFound(object);
   }
 }

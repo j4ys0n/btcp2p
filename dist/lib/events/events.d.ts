@@ -1,7 +1,3 @@
-export interface PropagateEvents {
-    client: boolean;
-    server: boolean;
-}
 export interface EventsScope {
     client: boolean;
     server: boolean;
@@ -40,18 +36,22 @@ export declare class Events {
     private onSentMessage;
     private fireSentMessage;
     clearSentMessage(): void;
-    private blockNotifyDispatcher;
-    private onBlockNotify;
-    private fireBlockNotify;
-    clearBlockNotify(): void;
+    private blockDispatcher;
+    private onBlock;
+    private fireBlock;
+    clearBlock(): void;
     private blockInvDispatcher;
     private onBlockInv;
     private fireBlockInv;
     clearBlockInv(): void;
-    private txNotifyDispatcher;
-    private onTxNotify;
-    private fireTxNotify;
-    clearTxNotify(): void;
+    private txDispatcher;
+    private onTx;
+    private fireTx;
+    clearTx(): void;
+    private txInvDispatcher;
+    private onTxInv;
+    private fireTxInv;
+    clearTxInv(): void;
     private peerMessageDispatcher;
     private onPeerMessage;
     private firePeerMessage;
@@ -88,7 +88,7 @@ export declare class Events {
     onServerStart(handler: Handler<boolean>): void;
     fireServerStart(event: boolean): void;
     clearServerStart(): void;
-    fire(event: string, payload: any, propagate?: PropagateEvents): void;
+    fire(event: string, payload: any): void;
     on(event: string, handler: Handler<any>): void;
     clearAllListeners(): void;
 }

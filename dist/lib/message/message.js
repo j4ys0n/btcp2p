@@ -2,9 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto = require("crypto");
 var crypto_binary_1 = require("crypto-binary");
+var message_consts_1 = require("./message.consts");
 var general_util_1 = require("../util/general.util");
+var db_util_1 = require("../util/db.util");
 var message_handlers_1 = require("./message.handlers");
-var blocks_1 = require("../blocks/blocks");
+var block_handler_1 = require("../blocks/block-handler");
+var transactions_1 = require("../transactions/transactions");
 var peers_1 = require("../peers/peers");
 var readFlowingBytes = function (stream, amount, preRead, callback) {
     var buff = (preRead) ? preRead : Buffer.from([]);
@@ -34,10 +37,12 @@ var Message = /** @class */ (function () {
      *  protocolVersion: number,
      * }
      */
-    function Message(messageOptions, scope) {
-        this.messageOptions = messageOptions;
+    function Message(options, scope) {
+        this.options = options;
         this.scope = scope;
         this.util = new general_util_1.Utils();
+        this.dbUtil = new db_util_1.DbUtil();
+        this.messageConsts = new message_consts_1.MessageConsts(this.util);
         this.magicInt = 0;
         // version message vars
         this.networkServices = Buffer.from('0100000000000000', 'hex'); //NODE_NETWORK services (value 1 packed as uint64)
@@ -47,48 +52,23 @@ var Message = /** @class */ (function () {
         //If protocol version is new enough, add do not relay transactions flag byte, outlined in BIP37
         //https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
         this.relayTransactions = Buffer.from('0x00', 'hex'); // false by default
-        this.commands = {
-            addr: this.util.commandStringBuffer('addr'),
-            alert: this.util.commandStringBuffer('alert'),
-            block: this.util.commandStringBuffer('block'),
-            blocktxn: this.util.commandStringBuffer('blocktxn'),
-            checkorder: this.util.commandStringBuffer('checkorder'),
-            feefilter: this.util.commandStringBuffer('feefilter'),
-            getaddr: this.util.commandStringBuffer('getaddr'),
-            getblocks: this.util.commandStringBuffer('getblocks'),
-            getblocktxn: this.util.commandStringBuffer('getblocktxn'),
-            getdata: this.util.commandStringBuffer('getdata'),
-            getheaders: this.util.commandStringBuffer('getheaders'),
-            headers: this.util.commandStringBuffer('headers'),
-            inv: this.util.commandStringBuffer('inv'),
-            mempool: this.util.commandStringBuffer('mempool'),
-            notfound: this.util.commandStringBuffer('notfound'),
-            ping: this.util.commandStringBuffer('ping'),
-            pong: this.util.commandStringBuffer('pong'),
-            reject: this.util.commandStringBuffer('reject'),
-            reply: this.util.commandStringBuffer('reply'),
-            sendcmpct: this.util.commandStringBuffer('sendcmpct'),
-            sendheaders: this.util.commandStringBuffer('sendheaders'),
-            submitorder: this.util.commandStringBuffer('submitorder'),
-            tx: this.util.commandStringBuffer('tx'),
-            verack: this.util.commandStringBuffer('verack'),
-            version: this.util.commandStringBuffer('version')
-        };
-        this.magic = Buffer.from(this.messageOptions.magic, 'hex');
+        this.commands = this.messageConsts.commands;
+        this.magic = Buffer.from(this.options.magic, 'hex');
         try {
             this.magicInt = this.magic.readUInt32LE(0);
         }
         catch (e) {
             throw new Error('read peer magic failed in constructor');
         }
-        if (this.messageOptions.relayTransactions) {
+        if (this.options.relayTransactions) {
             this.relayTransactions = Buffer.from('0x01', 'hex');
         }
         else {
             this.relayTransactions = Buffer.from('0x00', 'hex');
         }
-        this.handlers = new message_handlers_1.MessageHandlers(this.scope, this.util);
-        this.blockHandler = new blocks_1.BlockHandler(this.scope, this.util);
+        this.handlers = new message_handlers_1.MessageHandlers(this.scope, this.util, this.dbUtil, this.options);
+        this.blockHandler = new block_handler_1.BlockHandler(this.scope, this.util, this.dbUtil, this.options);
+        this.transactions = new transactions_1.Transactions(this.scope, this.util, this.dbUtil, this.options);
         this.peerHandler = new peers_1.PeerHandler(this.scope);
     }
     Message.prototype.sendMessage = function (command, payload) {
@@ -104,7 +84,7 @@ var Message = /** @class */ (function () {
     Message.prototype.sendVersion = function () {
         // https://en.bitcoin.it/wiki/Protocol_documentation#version
         var payload = Buffer.concat([
-            this.util.packUInt32LE(this.messageOptions.protocolVersion),
+            this.util.packUInt32LE(this.options.protocolVersion),
             this.networkServices,
             this.util.packInt64LE(Date.now() / 1000 | 0),
             this.emptyNetAddress,
@@ -144,13 +124,17 @@ var Message = /** @class */ (function () {
         var headerHashes = Buffer.from(this.util.reverseHexBytes(hash), 'hex');
         var stopHash = Buffer.from(this.util.stopHash(32));
         var payload = Buffer.concat([
-            this.util.packUInt32LE(this.messageOptions.protocolVersion),
+            this.util.packUInt32LE(this.options.protocolVersion),
             hashCount,
             headerHashes,
             stopHash
         ]);
         this.sendMessage(this.commands.getblocks, payload);
         this.scope.events.fire('sent_message', { command: 'getblocks', payload: {} });
+    };
+    Message.prototype.sendGetData = function (payload) {
+        this.sendMessage(this.commands.getdata, payload);
+        this.scope.events.fire('sent_message', { command: 'getdata', payload: payload });
     };
     Message.prototype.sendAddr = function (ip, port) {
         var count = Buffer.from([0x01]);
@@ -242,6 +226,16 @@ var Message = /** @class */ (function () {
         this.scope.events.fire('peer_message', { command: command });
         // console.log(payload);
         switch (command) {
+            case this.commands.verack.toString():
+                this.scope.events.fire('verack', true);
+                break;
+            case this.commands.version.toString():
+                this.handlers.handleVersion(payload)
+                    .then(function (version) {
+                    // console.log(version);
+                    _this.sendVerack();
+                });
+                break;
             case this.commands.ping.toString():
                 this.handlers.handlePing(payload)
                     .then(function (ping) {
@@ -261,16 +255,6 @@ var Message = /** @class */ (function () {
             case this.commands.addr.toString():
                 this.peerHandler.handleAddr(payload);
                 break;
-            case this.commands.verack.toString():
-                this.scope.events.fire('verack', true);
-                break;
-            case this.commands.version.toString():
-                this.handlers.handleVersion(payload)
-                    .then(function (version) {
-                    // console.log(version);
-                    _this.sendVerack();
-                });
-                break;
             case this.commands.reject.toString():
                 this.handlers.handleReject(payload);
                 break;
@@ -280,8 +264,16 @@ var Message = /** @class */ (function () {
             case this.commands.headers.toString():
                 this.blockHandler.handleHeaders(payload);
                 break;
+            case this.commands.block.toString():
+                this.blockHandler.handleBlock(payload);
+                break;
+            case this.commands.tx.toString():
+                this.transactions.handleTransaction(payload);
+                break;
             default:
                 // nothing
+                console.log(command);
+                console.log(payload);
                 break;
         }
     };

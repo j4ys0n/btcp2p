@@ -1,6 +1,8 @@
 import { Utils } from '../util/general.util';
+import { DbUtil } from '../util/db.util';
+import { BlockHandler } from '../blocks/block-handler';
 import { RejectedEvent } from '../interfaces/events.interface';
-import { ProtocolScope } from '../interfaces/peer.interface';
+import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
 export interface Nonce {
     nonce: Buffer;
 }
@@ -18,7 +20,10 @@ export interface Version {
 export declare class MessageHandlers {
     private scope;
     private util;
-    private blockHandler;
+    private dbUtil;
+    private options;
+    blockHandler: BlockHandler;
+    private transactions;
     protected invCodes: {
         error: number;
         tx: number;
@@ -36,7 +41,7 @@ export declare class MessageHandlers {
         42: string;
         43: string;
     };
-    constructor(scope: ProtocolScope, util: Utils);
+    constructor(scope: ProtocolScope, util: Utils, dbUtil: DbUtil, options: StartOptions);
     handlePing(payload: Buffer): Promise<Nonce>;
     handlePong(payload: Buffer): Promise<Nonce>;
     handleReject(payload: Buffer): Promise<RejectedEvent>;

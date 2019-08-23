@@ -2,16 +2,34 @@ import * as net from 'net';
 import { Events } from '../events/events';
 import { Message } from '../message/message';
 
+export interface NetworkOptions {
+  magic: string;
+  protocolVersion: number;
+  protocol: string; // defaults to bitcoin
+  genesisTarget: string; // defaults to bitcoin's
+  genesisHash: string;
+  pubKeyVersion: number;
+  scriptVersion: number;
+}
+
 export interface StartOptions {
   name: string;
-  peerMagic: string;
   relayTransactions: boolean;
   host: string;
   port: number;
   serverPort?: number;
   startServer?: boolean;
-  protocolVersion: number;
   persist: boolean;
+  skipBlockDownload?: boolean;
+  fetchMempool?: boolean;
+  network: NetworkOptions;
+}
+
+export interface Shared {
+  externalHeight: number
+  internalHeight: number
+  dbHeight: number;
+  synced: boolean;
 }
 
 export interface ProtocolScope {
@@ -20,6 +38,7 @@ export interface ProtocolScope {
   socket: net.Socket;
   message: Message;
   connected: boolean;
+  shared: Shared;
 }
 
 export interface PeerAddress {
@@ -29,4 +48,16 @@ export interface PeerAddress {
   ipVersion: Number;
   services?: String;
   timestamp?: Number;
+}
+
+export interface Version {
+  version: number;
+  services: number;
+  time: any;
+  addr_recv: string;
+  addr_from: string;
+  nonce: string;
+  client: string;
+  height: number;
+  relay: boolean;
 }

@@ -38,11 +38,13 @@ var Events = /** @class */ (function () {
         // message
         this.sentMessageDispatcher = new EventDispatcher();
         // block notify
-        this.blockNotifyDispatcher = new EventDispatcher();
+        this.blockDispatcher = new EventDispatcher();
         // block inv notify
         this.blockInvDispatcher = new EventDispatcher();
         // tx notify
-        this.txNotifyDispatcher = new EventDispatcher();
+        this.txDispatcher = new EventDispatcher();
+        // tx inv notify
+        this.txInvDispatcher = new EventDispatcher();
         // peer message
         this.peerMessageDispatcher = new EventDispatcher();
         // version message
@@ -118,14 +120,14 @@ var Events = /** @class */ (function () {
     Events.prototype.clearSentMessage = function () {
         this.sentMessageDispatcher.clear();
     };
-    Events.prototype.onBlockNotify = function (handler) {
-        this.blockNotifyDispatcher.register(handler);
+    Events.prototype.onBlock = function (handler) {
+        this.blockDispatcher.register(handler);
     };
-    Events.prototype.fireBlockNotify = function (event) {
-        this.blockNotifyDispatcher.fire(event);
+    Events.prototype.fireBlock = function (event) {
+        this.blockDispatcher.fire(event);
     };
-    Events.prototype.clearBlockNotify = function () {
-        this.blockNotifyDispatcher.clear();
+    Events.prototype.clearBlock = function () {
+        this.blockDispatcher.clear();
     };
     Events.prototype.onBlockInv = function (handler) {
         this.blockInvDispatcher.register(handler);
@@ -136,14 +138,23 @@ var Events = /** @class */ (function () {
     Events.prototype.clearBlockInv = function () {
         this.blockInvDispatcher.clear();
     };
-    Events.prototype.onTxNotify = function (handler) {
-        this.txNotifyDispatcher.register(handler);
+    Events.prototype.onTx = function (handler) {
+        this.txDispatcher.register(handler);
     };
-    Events.prototype.fireTxNotify = function (event) {
-        this.txNotifyDispatcher.fire(event);
+    Events.prototype.fireTx = function (event) {
+        this.txDispatcher.fire(event);
     };
-    Events.prototype.clearTxNotify = function () {
-        this.txNotifyDispatcher.clear();
+    Events.prototype.clearTx = function () {
+        this.txDispatcher.clear();
+    };
+    Events.prototype.onTxInv = function (handler) {
+        this.txInvDispatcher.register(handler);
+    };
+    Events.prototype.fireTxInv = function (event) {
+        this.txInvDispatcher.fire(event);
+    };
+    Events.prototype.clearTxInv = function () {
+        this.txInvDispatcher.clear();
     };
     Events.prototype.onPeerMessage = function (handler) {
         this.peerMessageDispatcher.register(handler);
@@ -232,7 +243,7 @@ var Events = /** @class */ (function () {
             this.serverStartDispatcher.clear();
         }
     };
-    Events.prototype.fire = function (event, payload, propagate) {
+    Events.prototype.fire = function (event, payload) {
         var command = (payload.command) ? ' -->' + payload.command : '';
         this.util.log('core', 'debug', '[' + this.scopedTo + '] firing event for ' + event + command);
         var triggerMapping = {
@@ -245,9 +256,10 @@ var Events = /** @class */ (function () {
             'pong': this.firePong,
             'error': this.fireError,
             'reject': this.fireReject,
-            'block': this.fireBlockNotify,
+            'block': this.fireBlock,
             'blockinv': this.fireBlockInv,
-            'tx': this.fireTxNotify,
+            'tx': this.fireTx,
+            'txinv': this.fireTxInv,
             'addr': this.fireAddr,
             'getheaders': this.fireGetHeaders,
             'headers': this.fireHeaders,
@@ -279,9 +291,10 @@ var Events = /** @class */ (function () {
             'pong': this.onPong,
             'error': this.onError,
             'reject': this.onReject,
-            'block': this.onBlockNotify,
+            'block': this.onBlock,
             'blockinv': this.onBlockInv,
-            'tx': this.onTxNotify,
+            'tx': this.onTx,
+            'txinv': this.onTxInv,
             'addr': this.onAddr,
             'getheaders': this.onGetHeaders,
             'headers': this.onHeaders,
@@ -309,8 +322,8 @@ var Events = /** @class */ (function () {
         this.clearPong();
         this.clearError();
         this.clearReject();
-        this.clearBlockNotify();
-        this.clearTxNotify();
+        this.clearBlock();
+        this.clearTx();
         this.clearAddr();
         this.clearGetHeaders();
         this.clearPeerMessage();

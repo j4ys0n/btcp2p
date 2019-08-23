@@ -1,19 +1,20 @@
+import { MessageConsts } from './message.consts';
 import { Utils } from '../util/general.util';
+import { DbUtil } from '../util/db.util';
 import { MessageHandlers } from './message.handlers';
-import { BlockHandler } from '../blocks/blocks';
+import { BlockHandler } from '../blocks/block-handler';
+import { Transactions } from '../transactions/transactions';
 import { PeerHandler } from '../peers/peers';
-import { ProtocolScope } from '../interfaces/peer.interface';
-export interface MessageOptions {
-    magic: string;
-    protocolVersion: number;
-    relayTransactions: boolean;
-}
+import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
 export declare class Message {
-    private messageOptions;
+    private options;
     private scope;
     protected util: Utils;
+    protected dbUtil: DbUtil;
+    protected messageConsts: MessageConsts;
     protected handlers: MessageHandlers;
-    protected blockHandler: BlockHandler;
+    blockHandler: BlockHandler;
+    protected transactions: Transactions;
     protected peerHandler: PeerHandler;
     private magic;
     private magicInt;
@@ -24,10 +25,9 @@ export declare class Message {
     private relayTransactions;
     commands: {
         addr: Buffer;
-        alert: Buffer;
         block: Buffer;
         blocktxn: Buffer;
-        checkorder: Buffer;
+        cmpctblock: Buffer;
         feefilter: Buffer;
         getaddr: Buffer;
         getblocks: Buffer;
@@ -37,14 +37,13 @@ export declare class Message {
         headers: Buffer;
         inv: Buffer;
         mempool: Buffer;
+        merkleblock: Buffer;
         notfound: Buffer;
         ping: Buffer;
         pong: Buffer;
         reject: Buffer;
-        reply: Buffer;
         sendcmpct: Buffer;
         sendheaders: Buffer;
-        submitorder: Buffer;
         tx: Buffer;
         verack: Buffer;
         version: Buffer;
@@ -56,7 +55,7 @@ export declare class Message {
      *  protocolVersion: number,
      * }
      */
-    constructor(messageOptions: MessageOptions, scope: ProtocolScope);
+    constructor(options: StartOptions, scope: ProtocolScope);
     sendMessage(command: Buffer, payload: Buffer): void;
     sendVersion(): void;
     sendVerack(): void;
@@ -65,6 +64,7 @@ export declare class Message {
     sendGetHeaders(payload: Buffer): void;
     sendGetAddr(): void;
     sendGetBlocks(hash: string): void;
+    sendGetData(payload: Buffer): void;
     sendAddr(ip: string, port: number): void;
     sendReject(msg: string, ccode: number, reason: string, extra: string): void;
     setupMessageParser(): void;

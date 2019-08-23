@@ -1,6 +1,10 @@
 import * as path from 'path';
 import * as Datastore from 'nestdb';
 
+import {
+  Block, BlockZcash, BestBlock, ReducedBlockHeader
+} from '../interfaces/blocks.interface';
+
 interface GetCollectionOptions {
   name: string;
   persistent: boolean;
@@ -15,20 +19,21 @@ export class DbUtil {
 
   constructor() {}
 
-  async getCollection(options: GetCollectionOptions): Promise<Datastore> {
+  async getCollection(options: GetCollectionOptions, index: any = undefined): Promise<Datastore> {
     const ds = this.datastores[options.name];
     if (ds !== undefined) {
       return Promise.resolve(ds);
     } else {
       let collection: Promise<Datastore>;
       if (options.persistent) {
-        console.log('persistent');
-        collection = this.loadCollection(options.name)
+        collection = this.loadCollection(options.name);
       } else {
-        console.log('in-memory')
         collection = this.memoryCollection();
       }
       const datastore = await collection;
+      if (index !== undefined) {
+        datastore.ensureIndex(index);
+      }
       this.datastores[options.name] = datastore;
       return this.datastores[options.name];
     }
@@ -36,7 +41,6 @@ export class DbUtil {
 
   loadCollection(filename: string): Promise<Datastore> {
     const filePath = path.join(__dirname, '../../data', (filename + '.db'));
-    console.log(filePath);
     const ds = new Datastore({filename: filePath});
     return new Promise((resolve, reject) => {
       ds.load((err: any) => {
@@ -52,5 +56,68 @@ export class DbUtil {
 
   memoryCollection(): Promise<Datastore> {
     return Promise.resolve(new Datastore());
+  }
+
+  saveTxToMempool(name: string, tx: any): Promise<any> {
+    let mempool = this.getCollection({
+      name: name + '-mempool',
+      persistent: true
+    });
+    return mempool.then((ds: Datastore) => {
+      // save tx to mempool collection
+    })
+  }
+
+  saveBlock(name: string, block: Block | BlockZcash): Promise<any> {
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: true
+    }, {fieldName: 'hash', unique: true});
+    return new Promise((resolve: any, reject: any) => {
+      blocks.then((ds: Datastore) => {
+        ds.insert(block, (err: any, doc: any) => {
+          if (err) {
+            reject(err)
+          }
+          resolve(doc);
+        });
+      })
+    });
+  }
+
+  getBestBlockHeight(name: string): Promise<BestBlock> {
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: true
+    });
+    return new Promise((resolve, reject) => {
+      blocks.then((ds: Datastore) => {
+        ds.find({}).sort({height: -1}).limit(1).exec((err: any, blocks: Array<Block | BlockZcash>) => {
+          if (err) {
+            return reject(err);
+          }
+          const height = (blocks[0] !== undefined) ? <number>blocks[0].height : 0;
+          const hash = (blocks[0] !== undefined) ? blocks[0].hash : '';
+          return resolve({ height, hash });
+        })
+      });
+    })
+  }
+
+  getBlocksForCache(name: string): Promise<Array<ReducedBlockHeader>> {
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: true
+    });
+    return new Promise((resolve, reject) => {
+      blocks.then((ds: Datastore) => {
+        ds.find({}, {hash: 1, height: 1, prevBlock: 1, nextBlock: 1}).exec((err: any, blocks: Array<ReducedBlockHeader>) => {
+          if (err) {
+            return reject(err);
+          }
+          return resolve(blocks)
+        })
+      })
+    });
   }
 }

@@ -1,27 +1,25 @@
 import { Utils } from '../util/general.util';
-import { HeadersEvent } from '../interfaces/events.interface';
-import { ProtocolScope } from '../interfaces/peer.interface';
-export interface BlockInv {
-    raw: Buffer;
-    parsed: {
-        version: number;
-        hash: string;
-    };
-}
+import { DbUtil } from '../util/db.util';
+import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
+import { BestBlock } from '../interfaces/blocks.interface';
 export declare class Blocks {
-    constructor();
-    parseBlockInv(payload: Buffer): Array<BlockInv>;
-    handleBlockInv(payload: Buffer): Array<BlockInv>;
-}
-export declare class BlockHandler {
     private scope;
     private util;
-    private blocks;
-    constructor(scope: ProtocolScope, util: Utils);
-    handleBlockInv(payload: Buffer): void;
-    parseHashes(hashLen: number, mParser: any): Array<string>;
-    handleGetHeaders(payload: Buffer): Promise<HeadersEvent>;
-    parseHeader(mParser: any): any;
-    parseHeaders(count: number, mParser: any): Array<any>;
-    handleHeaders(payload: Buffer): Promise<HeadersEvent>;
+    private dbUtil;
+    private options;
+    private blockList;
+    private blockCheckInterval;
+    private blockCheckTimer;
+    private blocksInFlight;
+    private lastBlockChecked;
+    constructor(scope: ProtocolScope, util: Utils, dbUtil: DbUtil, options: StartOptions);
+    startFetch(block: BestBlock): void;
+    getHashOfBestBlock(currentHeight: number): string;
+    requestBlocksFromPeer(currentHeight: number): void;
+    inFlight(): boolean;
+    checkForNewBlocks(): void;
+    groomBlockList(): Promise<any>;
+    updateBlockInFlight(hash: string): void;
+    updateBlockList(block: any): void;
+    updateBlockListWithInv(blockInv: any): void;
 }

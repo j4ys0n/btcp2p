@@ -4,17 +4,13 @@ import { MessageBuilder } from 'crypto-binary';
 
 import { MessageConsts } from './message.consts';
 import { Utils } from '../util/general.util';
+import { DbUtil } from '../util/db.util';
 import { MessageHandlers } from './message.handlers';
-import { BlockHandler } from '../blocks/blocks';
+import { BlockHandler } from '../blocks/block-handler';
+import { TransactionHandler } from '../transactions/transaction-handler';
 import { PeerHandler } from '../peers/peers';
 
-import { ProtocolScope } from '../interfaces/peer.interface';
-
-export interface MessageOptions {
-  magic: string;
-  protocolVersion: number;
-  relayTransactions: boolean
-}
+import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
 
 const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, callback: Function): void => {
   let buff = (preRead) ? preRead : Buffer.from([]);
@@ -40,9 +36,11 @@ const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
 
 export class Message {
   protected util: Utils = new Utils();
+  protected dbUtil: DbUtil = new DbUtil();
   protected messageConsts: MessageConsts = new MessageConsts(this.util);
-  protected handlers!: MessageHandlers;
-  protected blockHandler!: BlockHandler;
+  protected handlers: MessageHandlers;
+  public blockHandler: BlockHandler;
+  protected transactionHandler: TransactionHandler;
   protected peerHandler!: PeerHandler;
 
   private magic!: Buffer;
@@ -66,20 +64,21 @@ export class Message {
    * }
    */
 
-  constructor(private messageOptions: MessageOptions, private scope: ProtocolScope) {
-    this.magic = Buffer.from(this.messageOptions.magic, 'hex');
+  constructor(private options: StartOptions, private scope: ProtocolScope) {
+    this.magic = Buffer.from(this.options.network.magic, 'hex');
     try {
       this.magicInt = this.magic.readUInt32LE(0);
     } catch (e) {
       throw new Error('read peer magic failed in constructor');
     }
-    if (this.messageOptions.relayTransactions) {
+    if (this.options.relayTransactions) {
       this.relayTransactions = Buffer.from('0x01', 'hex');
     } else {
       this.relayTransactions = Buffer.from('0x00', 'hex');
     }
-    this.handlers = new MessageHandlers(this.scope, this.util);
-    this.blockHandler = new BlockHandler(this.scope, this.util);
+    this.handlers = new MessageHandlers(this.scope, this.util, this.dbUtil, this.options);
+    this.blockHandler = new BlockHandler(this.scope, this.util, this.dbUtil, this.options);
+    this.transactionHandler = new TransactionHandler(this.scope, this.util, this.dbUtil, this.options);
     this.peerHandler = new PeerHandler(this.scope);
   }
 
@@ -97,7 +96,7 @@ export class Message {
   sendVersion(): void {
     // https://en.bitcoin.it/wiki/Protocol_documentation#version
     const payload = Buffer.concat([
-      this.util.packUInt32LE(this.messageOptions.protocolVersion),
+      this.util.packUInt32LE(this.options.network.protocolVersion),
       this.networkServices,
       this.util.packInt64LE(Date.now() / 1000 | 0),
       this.emptyNetAddress,
@@ -143,13 +142,18 @@ export class Message {
     const headerHashes = Buffer.from(this.util.reverseHexBytes(hash), 'hex');
     const stopHash = Buffer.from(this.util.stopHash(32));
     const payload = Buffer.concat([
-      this.util.packUInt32LE(this.messageOptions.protocolVersion),
+      this.util.packUInt32LE(this.options.network.protocolVersion),
       hashCount,
       headerHashes,
       stopHash
     ]);
     this.sendMessage(this.commands.getblocks, payload);
     this.scope.events.fire('sent_message', {command: 'getblocks', payload: {}});
+  }
+
+  sendGetData(payload: Buffer): void {
+    this.sendMessage(this.commands.getdata, payload);
+    this.scope.events.fire('sent_message', {command: 'getdata', payload: payload});
   }
 
   sendAddr(ip: string, port: number): void {
@@ -246,6 +250,15 @@ export class Message {
     this.scope.events.fire('peer_message', {command: command});
     // console.log(payload);
     switch (command) {
+      case this.commands.verack.toString():
+        this.scope.events.fire('verack', true);
+        break;
+      case this.commands.version.toString():
+        this.handlers.handleVersion(payload)
+        .then((version) => {
+          this.sendVerack();
+        });
+        break;
       case this.commands.ping.toString():
         this.handlers.handlePing(payload)
         .then((ping) => {
@@ -265,28 +278,28 @@ export class Message {
       case this.commands.addr.toString():
         this.peerHandler.handleAddr(payload);
         break;
-      case this.commands.verack.toString():
-        this.scope.events.fire('verack', true);
-        break;
-      case this.commands.version.toString():
-        this.handlers.handleVersion(payload)
-        .then((version) => {
-          // console.log(version);
-          this.sendVerack();
-        });
-        break;
       case this.commands.reject.toString():
         this.handlers.handleReject(payload);
         break;
       case this.commands.getheaders.toString():
         this.blockHandler.handleGetHeaders(payload);
-
         break;
       case this.commands.headers.toString():
-          this.blockHandler.handleHeaders(payload);
+        this.blockHandler.handleHeaders(payload);
+        break;
+      case this.commands.block.toString():
+        this.blockHandler.handleBlock(payload);
+        break;
+      case this.commands.tx.toString():
+        this.transactionHandler.handleTransaction(payload);
+        break;
+      case this.commands.notfound.toString():
+        this.handlers.handleNotFound(payload);
         break;
       default:
         // nothing
+        console.log(command);
+        console.log(payload);
         break;
     }
   }

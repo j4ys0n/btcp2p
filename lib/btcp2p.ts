@@ -2,13 +2,14 @@ import * as net from 'net';
 
 // class imports
 import { Events } from './events/events';
-import { InternalEvents } from './events/events.internal';
 import { Utils } from './util/general.util';
+import { DbUtil } from './util/db.util';
 import { Message } from './message/message';
 
 // interface imports
-import { StartOptions, ProtocolScope } from './interfaces/peer.interface';
+import { StartOptions, ProtocolScope, Version } from './interfaces/peer.interface';
 import { HeadersEvent } from './interfaces/events.interface';
+import { BestBlock } from './interfaces/blocks.interface';
 
 // testing flag
 const ENV = process.env.NODE_ENV;
@@ -25,6 +26,7 @@ export class BTCP2P {
   private serverStarting: boolean = false;
   private serverStarted: boolean = false;
   private serverPort!: number;
+  private supportedProtocols: Array<string> = ['bitcoin', 'zcash'];
 
   private message!: Message; // for instantiation to avoid 'possibly undefined error'
   // separate scope package for client, server and internal
@@ -34,7 +36,13 @@ export class BTCP2P {
     on: this.clientEvents.on.bind(this.clientEvents),
     socket: this.clientSocket,
     message: this.message, // this will be overwritten
-    connected: false
+    connected: false,
+    shared: {
+      externalHeight: 0,
+      internalHeight: 0,
+      dbHeight: 0,
+      synced: false
+    }
   }
   private serverEvents: Events = new Events({client: false, server: true});
   public server: ProtocolScope = {
@@ -42,34 +50,21 @@ export class BTCP2P {
     on: this.serverEvents.on.bind(this.serverEvents),
     socket: this.serverSocket,
     message: this.message, // this will be overwritten
-    connected: false
-  }
-  private internalEvents: InternalEvents = new InternalEvents({
-    client: false,
-    server: false,
-    scopes: {
-      clientEvents: this.clientEvents,
-      serverEvents: this.serverEvents
+    connected: false,
+    shared: {
+      externalHeight: 0,
+      internalHeight: 0,
+      dbHeight: 0,
+      synced: false
     }
-  });
-  protected internal: ProtocolScope = {
-    events: this.internalEvents,
-    on: this.internalEvents.on.bind(this.internalEvents),
-    socket: this.serverSocket, // this could be overwritten
-    message: this.message, // this will be overwritten
-    connected: false
   }
-  // protected internalServerEvents: Events = new Events(true);
-  // expose events to listen to for client and server
-  // public onClient: Events['on'] = this.clientEvents.on.bind(this.clientEvents);
-  // public onServer: Events['on'] = this.serverEvents.on.bind(this.serverEvents);
 
   protected util: Utils = new Utils();
+  protected dbUtil: DbUtil = new DbUtil();
 
   private pings: any;
   private pingInterval = 5 * MINUTE;
   // if the remote peer acknowledges the version (verack), it can be considered connected
-  private internalScopeInit = false;
   private serverScopeInit = false;
   private clientScopeInit = false;
 
@@ -81,6 +76,9 @@ export class BTCP2P {
 
   private validConnectionConfig = true;
 
+  private skipBlockDownload = false;
+  private saveMempool = false;
+
   /**
    * @param options: StartOptions = {
    *  name: string,
@@ -91,6 +89,7 @@ export class BTCP2P {
    *  serverPort: number,
    *  startServer: boolean,
    *  protocolVersion: number,
+   *  protocol: string,
    *  persist: boolean
    * }
    */
@@ -100,6 +99,9 @@ export class BTCP2P {
       this.serverPort = this.options.serverPort;
     } else {
       this.serverPort = this.options.port;
+    }
+    if (this.supportedProtocols.indexOf(this.options.network.protocol) === -1) {
+      throw new Error('protocol must be one of: ' + this.supportedProtocols.join(', '));
     }
     this.util.log('core', 'info', 'server port: ' + this.serverPort);
 
@@ -114,13 +116,27 @@ export class BTCP2P {
       this.restartClient(this.rejectedRetryPause);
     });
 
+    if (
+      this.options.skipBlockDownload !== undefined &&
+      this.options.skipBlockDownload !== false
+    ) {
+      this.skipBlockDownload = true;
+    }
+
+    if (
+      this.options.fetchMempool !== undefined &&
+      this.options.fetchMempool !== false
+    ) {
+      this.saveMempool = true;
+    }
+
     // start server if necessary and init connection
     if (this.options.startServer) {
       this.serverInstance = net.createServer((socket) => {
         this.util.log('core', 'debug', 'server created');
         this.serverSocket = socket;
-        this.initInternalScope(this.serverSocket);
         this.initServerScope(this.serverSocket);
+        // this.initInternalScope(this.serverSocket);
       });
       this.startServer()
       .then(() => {
@@ -151,20 +167,24 @@ export class BTCP2P {
     });
   }
 
-  private initInternalScope(socket: net.Socket): void {
-    // if (!this.internalScopeInit) {
-    //   this.internalScopeInit = true;
-    //   this.util.log('core', 'debug', 'initializing internal message & event handling');
-    //   this.internal.socket = socket;
-    //   this.internal.message = new Message({
-    //     magic: this.options.peerMagic,
-    //     protocolVersion: this.options.protocolVersion,
-    //     relayTransactions: this.options.relayTransactions
-    //   }, this.internal);
-    //   this.internal.message.setupMessageParser();
-    // } else {
-    //   this.util.log('core', 'debug', 'internal message & event handling already instantiated');
-    // }
+  private startBlockFetch(scope: ProtocolScope): void {
+    this.getInternalBlockHeight()
+    .then((block: BestBlock) => {
+      this.util.log('core', 'info', 'best block: ' + JSON.stringify(block));
+      scope.message.blockHandler.blocks.startFetch(block)
+      return;
+    })
+  }
+
+  private getInternalBlockHeight(): Promise<BestBlock> {
+    return this.dbUtil.getBestBlockHeight(this.options.name)
+    .then((block: BestBlock): Promise<BestBlock> => {
+      this.server.shared.internalHeight = block.height;
+      this.server.shared.dbHeight = block.height;
+      this.client.shared.internalHeight = block.height;
+      this.client.shared.dbHeight = block.height;
+      return Promise.resolve(block);
+    });
   }
 
   private initServerScope(socket: net.Socket): void {
@@ -172,11 +192,7 @@ export class BTCP2P {
       this.serverScopeInit = true;
       this.util.log('core', 'debug', 'initializing server message & event handling');
       this.server.socket = socket;
-      this.server.message = new Message({
-        magic: this.options.peerMagic,
-        protocolVersion: this.options.protocolVersion,
-        relayTransactions: this.options.relayTransactions
-      }, this.server);
+      this.server.message = new Message(this.options, this.server);
       this.server.message.setupMessageParser();
       this.initEventHandlers(this.server);
     } else {
@@ -189,11 +205,7 @@ export class BTCP2P {
       this.clientScopeInit = true;
       this.util.log('core', 'debug', 'initializing client message & event handling');
       this.client.socket = socket;
-      this.client.message = new Message({
-        magic: this.options.peerMagic,
-        protocolVersion: this.options.protocolVersion,
-        relayTransactions: this.options.relayTransactions
-      }, this.client);
+      this.client.message = new Message(this.options, this.client);
       this.client.message.setupMessageParser();
       this.initEventHandlers(this.client);
     } else {
@@ -218,8 +230,8 @@ export class BTCP2P {
       if (response.success) {
         this.util.log('core', 'info', 'client connection successful');
         this.clientSocket = response.socket;
-        this.initInternalScope(this.clientSocket);
         this.initClientScope(this.clientSocket);
+        // this.initInternalScope(this.clientSocket);
         this.client.message.sendVersion();
       }
     });
@@ -282,16 +294,40 @@ export class BTCP2P {
   }
 
   private initEventHandlers(scope: ProtocolScope): void {
+    let blockFetchStarted: boolean = false;
+    let havePeerVersion: boolean = false;
+
+    const tryStartActions = () => {
+      if (scope.connected && havePeerVersion && !blockFetchStarted) {
+        if (!this.skipBlockDownload) {
+          blockFetchStarted = true;
+          this.startBlockFetch(scope);
+        }
+        if (this.saveMempool) {
+          scope.message.sendMessage(
+            scope.message.commands.mempool,
+            Buffer.from([])
+          )
+        }
+      }
+    }
+
     scope.events.on('verack', e => {
       if (!scope.connected) {
         scope.connected = true;
         scope.events.fire('connect', {});
+        tryStartActions();
       }
     });
+    scope.events.on('version', (version: Version) => {
+      scope.shared.externalHeight = version.height;
+      havePeerVersion = true;
+      tryStartActions();
+    })
     scope.events.on('getheaders', (payload: HeadersEvent) => {
       if (!this.headers) {
         this.waitingForHeaders = true;
-        scope.message.sendGetHeaders(payload.raw);
+        // scope.message.sendGetHeaders(payload.raw);
       } else {
         scope.message.sendHeaders(this.headers);
       }
@@ -300,7 +336,14 @@ export class BTCP2P {
       if (this.waitingForHeaders) {
         this.headers = payload.raw;
         this.waitingForHeaders = false;
-        scope.message.sendHeaders(payload.raw);
+        // scope.message.sendHeaders(payload.raw);
+        // scope.message.sendHeaders(
+        //   Buffer.from([
+        //     0x04000000,
+        //     0x0000000000000000000000000000000000000000000000000000000000000000,
+        //     0x2318b72b4e35d86f0c66c8c956fe7c3ae1ef7c33b835c58fdd9a1ed5f2b4852a,
+        //   ])
+        // )
       } else {
         this.headers = payload.raw;
       }

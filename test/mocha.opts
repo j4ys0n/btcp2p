@@ -2,5 +2,5 @@
 --require tsconfig-paths/register
 --require source-map-support/register
 --full-trace
---timeout 15000
+--timeout 1500000
 --exit

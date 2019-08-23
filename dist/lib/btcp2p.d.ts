@@ -1,4 +1,5 @@
 import { Utils } from './util/general.util';
+import { DbUtil } from './util/db.util';
 import { StartOptions, ProtocolScope } from './interfaces/peer.interface';
 export declare class BTCP2P {
     private options;
@@ -8,17 +9,16 @@ export declare class BTCP2P {
     private serverStarting;
     private serverStarted;
     private serverPort;
+    private supportedProtocols;
     private message;
     private clientEvents;
     client: ProtocolScope;
     private serverEvents;
     server: ProtocolScope;
-    private internalEvents;
-    protected internal: ProtocolScope;
     protected util: Utils;
+    protected dbUtil: DbUtil;
     private pings;
     private pingInterval;
-    private internalScopeInit;
     private serverScopeInit;
     private clientScopeInit;
     protected rejectedRetryPause: number;
@@ -36,12 +36,14 @@ export declare class BTCP2P {
      *  serverPort: number,
      *  startServer: boolean,
      *  protocolVersion: number,
+     *  protocol: string,
      *  persist: boolean
      * }
      */
     constructor(options: StartOptions);
     startServer(): Promise<any>;
-    private initInternalScope;
+    private startBlockFetch;
+    private getInternalBlockHeight;
     private initServerScope;
     private initClientScope;
     stopServer(): Promise<any>;
