@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { ProtocolScope } from '../interfaces/peer.interface';
 import { AddressEvent } from '../interfaces/events.interface';
 export declare class PeerHandler {

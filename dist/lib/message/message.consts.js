@@ -32,6 +32,17 @@ var MessageConsts = /** @class */ (function () {
             verack: this.util.commandStringBuffer('verack'),
             version: this.util.commandStringBuffer('version') // send or receive version (part of handshake)
         };
+        // https://en.bitcoin.it/wiki/Protocol_documentation#reject
+        this.rejectCodes = {
+            1: 'REJECT_MALFORMED',
+            10: 'REJECT_INVALID',
+            11: 'REJECT_OBSOLETE',
+            12: 'REJECT_DUPLICATE',
+            40: 'REJECT_NONSTANDARD',
+            41: 'REJECT_DUST',
+            42: 'REJECT_INSUFFICIENTFEE',
+            43: 'REJECT_CHECKPOINT'
+        };
     }
     return MessageConsts;
 }());

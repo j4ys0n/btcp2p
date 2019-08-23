@@ -12,12 +12,17 @@ export declare class Blocks {
     private blockCheckTimer;
     private blocksInFlight;
     private lastBlockChecked;
+    private confirmationThreshold;
     constructor(scope: ProtocolScope, util: Utils, dbUtil: DbUtil, options: StartOptions);
     startFetch(block: BestBlock): void;
-    getHashOfBestBlock(currentHeight: number): string;
+    getBlockHashAtHeight(currentHeight: number): string;
     requestBlocksFromPeer(currentHeight: number): void;
     inFlight(): boolean;
     checkForNewBlocks(): void;
+    checkIfFullySynced(): void;
+    chainFullySynced(height: number): void;
+    saveNextBlock(): Promise<any>;
+    calcBlockHeight(hash: string): Promise<any>;
     groomBlockList(): Promise<any>;
     updateBlockInFlight(hash: string): void;
     updateBlockList(block: any): void;

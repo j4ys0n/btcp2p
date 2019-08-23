@@ -14,7 +14,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var crypto_binary_1 = require("crypto-binary");
 var blocks_1 = require("./blocks");
 var block_parser_1 = require("./block-parser");
-var transactions_1 = require("../transactions/transactions");
+var transaction_parser_1 = require("../transactions/transaction-parser");
 var BlockHandler = /** @class */ (function () {
     function BlockHandler(scope, util, dbUtil, options) {
         this.scope = scope;
@@ -23,7 +23,7 @@ var BlockHandler = /** @class */ (function () {
         this.options = options;
         this.blocks = new blocks_1.Blocks(this.scope, this.util, this.dbUtil, this.options);
         this.blockParser = new block_parser_1.BlockParser(this.options, this.util);
-        this.transactions = new transactions_1.Transactions(this.scope, this.util, this.dbUtil, this.options);
+        this.transactionParser = new transaction_parser_1.TransactionParser(this.util, this.options);
     }
     BlockHandler.prototype.handleBlockInv = function (payload) {
         var _this = this;
@@ -43,10 +43,12 @@ var BlockHandler = /** @class */ (function () {
         // parse block header
         var blockHeader = this.blockParser.parseHeader(p);
         // parse transactions
-        var txes = this.transactions.parseTransactions(p);
+        var txes = this.transactionParser.parseTransactions(p);
         var block = __assign({}, blockHeader, { transactions: txes });
         this.scope.events.fire('block', block);
-        this.blocks.updateBlockList(block);
+        if (!this.options.skipBlockDownload) {
+            this.blocks.updateBlockList(block);
+        }
         // TODO
         // save block to db (parsed and raw) if prevBlock matches actual prev block..
         // if prevBlock does notmatch prev block, keep going back, maybe reorg.

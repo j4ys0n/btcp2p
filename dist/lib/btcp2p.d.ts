@@ -26,6 +26,8 @@ export declare class BTCP2P {
     private headers;
     private waitingForHeaders;
     private validConnectionConfig;
+    private skipBlockDownload;
+    private saveMempool;
     /**
      * @param options: StartOptions = {
      *  name: string,

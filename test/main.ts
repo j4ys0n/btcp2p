@@ -7,8 +7,12 @@ import { MessageParser } from 'crypto-binary';
 import { BTCP2P } from '../lib/btcp2p';
 import { MessageConsts } from '../lib/message/message.consts';
 import {
-  DisconnectEvent, RejectedEvent, PeerMessageEvent, HeadersEvent
-} from '../lib/interfaces/events.interface'
+  DisconnectEvent, RejectedEvent, PeerMessageEvent, HeadersEvent, BlockNotifyEvent
+} from '../lib/interfaces/events.interface';
+
+import {
+  Block, BlockZcash
+} from '../lib/interfaces/blocks.interface';
 
 import { TransactionParser } from '../lib/transactions/transaction-parser';
 import { Utils } from '../lib/util/general.util';
@@ -205,7 +209,7 @@ describe('Unit tests', () => {
 
     it('should decode a transaction', (done) => {
       const utils = new Utils();
-      const txparser = new TransactionParser(utils, integrationTestOptions)
+      const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
       const p = new MessageParser(Buffer.from('0100000001baa5ec1b07ab16b8c1b55b27d703e012f59693ff1ffddc91a6e4502bb38ad85b0100000000ffffffff01c0a1fc53020000001976a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088aca8f80800', 'hex'));
       const txes = txparser.parseBitcoinTransactions(p, 1)
       // console.log(txes);
@@ -263,6 +267,9 @@ describe('Integration Tests', () => {
       // console.log(e)
       // expect(e[0].parsed.hash).to.be.equal(nextHash);
       // btcp2p.client.socket.end();
+    });
+    btcp2p.client.on('block', (e: Block) => {
+
     });
     btcp2p.client.on('getheaders', (e: any) => {
       btcp2p.client.events.clearGetHeaders();

@@ -2,7 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto_binary_1 = require("crypto-binary");
 var block_handler_1 = require("../blocks/block-handler");
-var transactions_1 = require("../transactions/transactions");
+var message_consts_1 = require("./message.consts");
+var transaction_handler_1 = require("../transactions/transaction-handler");
 var MessageHandlers = /** @class */ (function () {
     function MessageHandlers(scope, util, dbUtil, options) {
         this.scope = scope;
@@ -17,19 +18,9 @@ var MessageHandlers = /** @class */ (function () {
             blockFiltered: 3,
             blockCompact: 4
         };
-        // https://en.bitcoin.it/wiki/Protocol_documentation#reject
-        this.rejectCodes = {
-            1: 'REJECT_MALFORMED',
-            10: 'REJECT_INVALID',
-            11: 'REJECT_OBSOLETE',
-            12: 'REJECT_DUPLICATE',
-            40: 'REJECT_NONSTANDARD',
-            41: 'REJECT_DUST',
-            42: 'REJECT_INSUFFICIENTFEE',
-            43: 'REJECT_CHECKPOINT'
-        };
         this.blockHandler = new block_handler_1.BlockHandler(this.scope, this.util, this.dbUtil, this.options);
-        this.transactions = new transactions_1.Transactions(this.scope, this.util, this.dbUtil, this.options);
+        this.messageConsts = new message_consts_1.MessageConsts(this.util);
+        this.transactionHandler = new transaction_handler_1.TransactionHandler(this.scope, this.util, this.dbUtil, this.options);
     }
     MessageHandlers.prototype.handlePing = function (payload) {
         var nonce = this.parseNonce(payload);
@@ -46,7 +37,7 @@ var MessageHandlers = /** @class */ (function () {
         var messageLen = p.readInt8();
         var message = p.raw(messageLen).toString();
         var ccode = p.readInt8();
-        var name = this.rejectCodes[ccode];
+        var name = this.messageConsts.rejectCodes[ccode];
         var reasonLen = p.readInt8();
         var reason = p.raw(reasonLen).toString();
         var extraLen = (p.buffer.length - 1) - (p.pointer - 1);
@@ -75,7 +66,6 @@ var MessageHandlers = /** @class */ (function () {
             height: s.readUInt32LE(),
             relay: Boolean(s.raw(1))
         };
-        this.scope.shared.externalHeight = parsed.height;
         if (parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
             parsed.time = new Date(parsed.time.readUInt32LE(0) * 1000);
         }
@@ -105,7 +95,7 @@ var MessageHandlers = /** @class */ (function () {
                     console.log('error, you can ignore this');
                     break;
                 case this.invCodes.tx:
-                    this.transactions.handleTransactionInv(payload);
+                    this.transactionHandler.handleTransactionInv(payload);
                     break;
                 case this.invCodes.block:
                     this.blockHandler.handleBlockInv(payload);
@@ -132,6 +122,37 @@ var MessageHandlers = /** @class */ (function () {
             nonce = Buffer.from([]);
         }
         return nonce;
+    };
+    MessageHandlers.prototype.handleNotFound = function (payload) {
+        var count = payload.readUInt8(0);
+        payload = payload.slice(1);
+        if (count >= 0xfd) {
+            count = payload.readUInt16LE(0);
+            payload = payload.slice(2);
+        }
+        var type;
+        var hash;
+        var mp = new crypto_binary_1.MessageParser(payload);
+        try {
+            type = mp.readUInt32LE(0);
+        }
+        catch (e) {
+        }
+        var object = {
+            count: count,
+            type: type
+        };
+        switch (type) {
+            case this.invCodes.tx:
+                hash = mp.raw(32).reverse().toString('hex');
+                object['hash'] = hash;
+                break;
+            case this.invCodes.block:
+                hash = mp.raw(32).reverse().toString('hex');
+                object['hash'] = hash;
+                break;
+        }
+        this.scope.events.fireNotFound(object);
     };
     return MessageHandlers;
 }());

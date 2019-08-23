@@ -17,7 +17,8 @@ export declare type ZcashTransaction = {
     bindingSig: string;
 } & BitcoinTransaction;
 export declare type TxInput = {
-    outpoint: string;
+    outpointIndex: number;
+    txid: string;
     signatureScript: string;
     sequence: string;
 };

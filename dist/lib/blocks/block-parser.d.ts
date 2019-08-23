@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { Utils } from '../util/general.util';
 import { StartOptions } from '../interfaces/peer.interface';
 import { BlockHeader, BlockHeaderZcash, BlockInv } from '../interfaces/blocks.interface';

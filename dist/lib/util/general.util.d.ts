@@ -1,3 +1,4 @@
+/// <reference types="node" />
 export declare class Utils {
     log(component: string, level: string, message: any): void;
     sha256(buffer: Buffer): Buffer;

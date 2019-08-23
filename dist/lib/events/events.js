@@ -61,6 +61,8 @@ var Events = /** @class */ (function () {
         this.getHeadersDispatcher = new EventDispatcher();
         // headers send (headers)
         this.headersDispatcher = new EventDispatcher();
+        // not found
+        this.notFoundDispatcher = new EventDispatcher();
         // server only events
         this.serverStartDispatcher = new EventDispatcher();
         this.scopedTo = (scope.client) ? 'client' : (scope.server) ? 'server' : 'internal';
@@ -228,6 +230,15 @@ var Events = /** @class */ (function () {
     Events.prototype.clearHeaders = function () {
         this.headersDispatcher.clear();
     };
+    Events.prototype.onNotFound = function (handler) {
+        this.notFoundDispatcher.register(handler);
+    };
+    Events.prototype.fireNotFound = function (event) {
+        this.notFoundDispatcher.fire(event);
+    };
+    Events.prototype.clearNotFound = function () {
+        this.notFoundDispatcher.clear();
+    };
     Events.prototype.onServerStart = function (handler) {
         if (this.scope.server) {
             this.serverStartDispatcher.register(handler);
@@ -264,7 +275,8 @@ var Events = /** @class */ (function () {
             'getheaders': this.fireGetHeaders,
             'headers': this.fireHeaders,
             'peer_message': this.firePeerMessage,
-            'sent_message': this.fireSentMessage
+            'sent_message': this.fireSentMessage,
+            'notfound': this.fireNotFound
         };
         var keys = Object.keys(triggerMapping);
         if (keys.indexOf(event) > -1) {
@@ -299,7 +311,8 @@ var Events = /** @class */ (function () {
             'getheaders': this.onGetHeaders,
             'headers': this.onHeaders,
             'peer_message': this.onPeerMessage,
-            'sent_message': this.onSentMessage
+            'sent_message': this.onSentMessage,
+            'notfound': this.onNotFound
         };
         var keys = Object.keys(handlerMapping);
         if (keys.indexOf(event) > -1) {
@@ -328,6 +341,7 @@ var Events = /** @class */ (function () {
         this.clearGetHeaders();
         this.clearPeerMessage();
         this.clearSentMessage();
+        this.clearNotFound();
     };
     return Events;
 }());

@@ -39,7 +39,7 @@ var BlockParser = /** @class */ (function () {
         return hashes;
     };
     BlockParser.prototype.parseHeader = function (mParser) {
-        if (this.options.protocol === 'zcash') {
+        if (this.options.network.protocol === 'zcash') {
             return this.parseZcashHeader(mParser);
         }
         // bitcoin is default
@@ -61,7 +61,7 @@ var BlockParser = /** @class */ (function () {
         return { part1: part1, part2: part2 };
     };
     BlockParser.prototype.calculateDifficulty = function (bits) {
-        var genTargetParts = this.getTargetParts(this.options.genesisTarget);
+        var genTargetParts = this.getTargetParts(this.options.network.genesisTarget);
         var blkTargetParts = this.getTargetParts(bits);
         var currentTarget = blkTargetParts.part2 * Math.pow(2, (8 * (blkTargetParts.part1 - 3)));
         var genesisTarget = genTargetParts.part2 * Math.pow(2, (8 * (genTargetParts.part1 - 3)));

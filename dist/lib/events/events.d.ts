@@ -84,6 +84,10 @@ export declare class Events {
     private onHeaders;
     private fireHeaders;
     clearHeaders(): void;
+    private notFoundDispatcher;
+    private onNotFound;
+    fireNotFound(event: any): void;
+    private clearNotFound;
     private serverStartDispatcher;
     onServerStart(handler: Handler<boolean>): void;
     fireServerStart(event: boolean): void;

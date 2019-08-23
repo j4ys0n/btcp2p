@@ -1,3 +1,4 @@
+/// <reference types="node" />
 export interface ConnectEvent {
 }
 export interface DisconnectEvent {
@@ -18,6 +19,7 @@ export interface BlockNotifyEvent {
 export interface TxInvEvent {
     version: number;
     hash: string;
+    raw: Buffer;
 }
 export interface TxEvent {
     hash: string;

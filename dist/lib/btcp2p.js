@@ -45,6 +45,7 @@ var BTCP2P = /** @class */ (function () {
             shared: {
                 externalHeight: 0,
                 internalHeight: 0,
+                dbHeight: 0,
                 synced: false
             }
         };
@@ -58,6 +59,7 @@ var BTCP2P = /** @class */ (function () {
             shared: {
                 externalHeight: 0,
                 internalHeight: 0,
+                dbHeight: 0,
                 synced: false
             }
         };
@@ -71,13 +73,15 @@ var BTCP2P = /** @class */ (function () {
         this.errorRetryPause = 3 * MINUTE; // on node crash/restart
         this.waitingForHeaders = false;
         this.validConnectionConfig = true;
+        this.skipBlockDownload = false;
+        this.saveMempool = false;
         if (!!this.options.serverPort) {
             this.serverPort = this.options.serverPort;
         }
         else {
             this.serverPort = this.options.port;
         }
-        if (this.supportedProtocols.indexOf(this.options.protocol) === -1) {
+        if (this.supportedProtocols.indexOf(this.options.network.protocol) === -1) {
             throw new Error('protocol must be one of: ' + this.supportedProtocols.join(', '));
         }
         this.util.log('core', 'info', 'server port: ' + this.serverPort);
@@ -90,6 +94,14 @@ var BTCP2P = /** @class */ (function () {
             _this.util.log('core', 'warn', 'client disconnected');
             _this.restartClient(_this.rejectedRetryPause);
         });
+        if (this.options.skipBlockDownload !== undefined &&
+            this.options.skipBlockDownload !== false) {
+            this.skipBlockDownload = true;
+        }
+        if (this.options.fetchMempool !== undefined &&
+            this.options.fetchMempool !== false) {
+            this.saveMempool = true;
+        }
         // start server if necessary and init connection
         if (this.options.startServer) {
             this.serverInstance = net.createServer(function (socket) {
@@ -128,12 +140,12 @@ var BTCP2P = /** @class */ (function () {
             }
         });
     };
-    BTCP2P.prototype.startBlockFetch = function () {
+    BTCP2P.prototype.startBlockFetch = function (scope) {
         var _this = this;
         this.getInternalBlockHeight()
             .then(function (block) {
             _this.util.log('core', 'info', 'best block: ' + JSON.stringify(block));
-            _this.client.message.blockHandler.blocks.startFetch(block);
+            scope.message.blockHandler.blocks.startFetch(block);
             return;
         });
     };
@@ -142,7 +154,9 @@ var BTCP2P = /** @class */ (function () {
         return this.dbUtil.getBestBlockHeight(this.options.name)
             .then(function (block) {
             _this.server.shared.internalHeight = block.height;
+            _this.server.shared.dbHeight = block.height;
             _this.client.shared.internalHeight = block.height;
+            _this.client.shared.dbHeight = block.height;
             return Promise.resolve(block);
         });
     };
@@ -258,12 +272,30 @@ var BTCP2P = /** @class */ (function () {
     };
     BTCP2P.prototype.initEventHandlers = function (scope) {
         var _this = this;
+        var blockFetchStarted = false;
+        var havePeerVersion = false;
+        var tryStartActions = function () {
+            if (scope.connected && havePeerVersion && !blockFetchStarted) {
+                if (!_this.skipBlockDownload) {
+                    blockFetchStarted = true;
+                    _this.startBlockFetch(scope);
+                }
+                if (_this.saveMempool) {
+                    scope.message.sendMessage(scope.message.commands.mempool, Buffer.from([]));
+                }
+            }
+        };
         scope.events.on('verack', function (e) {
             if (!scope.connected) {
                 scope.connected = true;
                 scope.events.fire('connect', {});
-                _this.startBlockFetch();
+                tryStartActions();
             }
+        });
+        scope.events.on('version', function (version) {
+            scope.shared.externalHeight = version.height;
+            havePeerVersion = true;
+            tryStartActions();
         });
         scope.events.on('getheaders', function (payload) {
             if (!_this.headers) {

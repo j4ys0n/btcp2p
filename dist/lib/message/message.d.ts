@@ -1,9 +1,10 @@
+/// <reference types="node" />
 import { MessageConsts } from './message.consts';
 import { Utils } from '../util/general.util';
 import { DbUtil } from '../util/db.util';
 import { MessageHandlers } from './message.handlers';
 import { BlockHandler } from '../blocks/block-handler';
-import { Transactions } from '../transactions/transactions';
+import { TransactionHandler } from '../transactions/transaction-handler';
 import { PeerHandler } from '../peers/peers';
 import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
 export declare class Message {
@@ -14,7 +15,7 @@ export declare class Message {
     protected messageConsts: MessageConsts;
     protected handlers: MessageHandlers;
     blockHandler: BlockHandler;
-    protected transactions: Transactions;
+    protected transactionHandler: TransactionHandler;
     protected peerHandler: PeerHandler;
     private magic;
     private magicInt;

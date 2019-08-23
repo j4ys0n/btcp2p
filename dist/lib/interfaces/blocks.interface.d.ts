@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { BitcoinTransaction, ZcashTransaction } from './transactions.interface';
 export declare type BlockHeader = {
     hash: string;

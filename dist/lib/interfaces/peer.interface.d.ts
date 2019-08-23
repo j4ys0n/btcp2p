@@ -1,23 +1,32 @@
+/// <reference types="node" />
 import * as net from 'net';
 import { Events } from '../events/events';
 import { Message } from '../message/message';
+export interface NetworkOptions {
+    magic: string;
+    protocolVersion: number;
+    protocol: string;
+    genesisTarget: string;
+    genesisHash: string;
+    pubKeyVersion: number;
+    scriptVersion: number;
+}
 export interface StartOptions {
     name: string;
-    magic: string;
     relayTransactions: boolean;
     host: string;
     port: number;
     serverPort?: number;
     startServer?: boolean;
-    protocolVersion: number;
-    protocol: string;
-    genesisTarget: string;
-    genesisHash: string;
     persist: boolean;
+    skipBlockDownload?: boolean;
+    fetchMempool?: boolean;
+    network: NetworkOptions;
 }
 export interface Shared {
     externalHeight: number;
     internalHeight: number;
+    dbHeight: number;
     synced: boolean;
 }
 export interface ProtocolScope {
@@ -35,4 +44,15 @@ export interface PeerAddress {
     ipVersion: Number;
     services?: String;
     timestamp?: Number;
+}
+export interface Version {
+    version: number;
+    services: number;
+    time: any;
+    addr_recv: string;
+    addr_from: string;
+    nonce: string;
+    client: string;
+    height: number;
+    relay: boolean;
 }

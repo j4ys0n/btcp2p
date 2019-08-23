@@ -9,17 +9,20 @@ var Blocks = /** @class */ (function () {
         this.blockList = {};
         this.blockCheckInterval = 15 * 1000;
         this.blocksInFlight = {};
+        // wait until blocks have this many confirmations before saving to db.
+        this.confirmationThreshold = 25;
     }
     Blocks.prototype.startFetch = function (block) {
         var _this = this;
-        this.blockList[this.options.genesisHash] = {
+        console.log(this.scope.shared);
+        this.blockList[this.options.network.genesisHash] = {
             requested: false,
             invReceived: false,
             blockReceived: false,
             height: 0
         };
         if (block.height === 0) {
-            this.lastBlockChecked = this.options.genesisHash;
+            this.lastBlockChecked = this.options.network.genesisHash;
         }
         else {
             this.lastBlockChecked = block.hash;
@@ -49,7 +52,7 @@ var Blocks = /** @class */ (function () {
             });
         });
     };
-    Blocks.prototype.getHashOfBestBlock = function (currentHeight) {
+    Blocks.prototype.getBlockHashAtHeight = function (currentHeight) {
         var _this = this;
         var hashes = Object.keys(this.blockList);
         var hash = '';
@@ -63,8 +66,9 @@ var Blocks = /** @class */ (function () {
         return hash;
     };
     Blocks.prototype.requestBlocksFromPeer = function (currentHeight) {
-        var hash = this.getHashOfBestBlock(currentHeight);
+        var hash = this.getBlockHashAtHeight(currentHeight);
         this.util.log('block', 'debug', 'requesting blocks from peer');
+        console.log(this.scope.shared);
         this.scope.message.sendGetBlocks(hash);
     };
     Blocks.prototype.inFlight = function () {
@@ -78,38 +82,95 @@ var Blocks = /** @class */ (function () {
         var inFlight = false;
         blocksInFlight.forEach(function (b) {
             var prevBlock = _this.blockList[b].prevBlock;
-            if (prevBlock !== undefined)
+            if (prevBlock !== undefined) {
                 if (_this.blockList[prevBlock] !== undefined) {
                     inFlight = true;
                 }
+            }
         });
         return inFlight;
     };
     Blocks.prototype.checkForNewBlocks = function () {
-        var _this = this;
         this.util.log('block', 'debug', 'checking for new blocks');
-        // get current height, wait 1 second, see if it's the same.
         var currentHeight = this.scope.shared.internalHeight;
-        setTimeout(function () {
-            var nextCurrentHeight = _this.scope.shared.internalHeight;
-            if (nextCurrentHeight > currentHeight) {
-                //syncing
-            }
-            else {
-                var inFlight = _this.inFlight();
-                if (currentHeight < _this.scope.shared.externalHeight && !inFlight) {
-                    // get next set of blocks
-                    _this.requestBlocksFromPeer(currentHeight);
+        var inFlight = this.inFlight();
+        if (currentHeight < this.scope.shared.externalHeight &&
+            !inFlight) {
+            // get next set of blocks
+            this.requestBlocksFromPeer(currentHeight);
+        }
+        else {
+            this.checkIfFullySynced();
+        }
+    };
+    Blocks.prototype.checkIfFullySynced = function () {
+        var currentHeight = this.scope.shared.internalHeight;
+        if (currentHeight >= this.scope.shared.externalHeight &&
+            !this.scope.shared.synced) {
+            this.chainFullySynced(currentHeight);
+        }
+    };
+    Blocks.prototype.chainFullySynced = function (height) {
+        clearInterval(this.blockCheckTimer);
+        //run one more time in case there's a gap
+        this.requestBlocksFromPeer(height);
+        this.scope.shared.synced = true;
+        this.util.log('block', 'info', this.options.name + ' chain fully synced');
+    };
+    Blocks.prototype.saveNextBlock = function () {
+        var _this = this;
+        var nextBlockHeightToSave = this.scope.shared.dbHeight + 1;
+        var nextBlockHashToSave = this.getBlockHashAtHeight(nextBlockHeightToSave);
+        var nextBlockToSave = this.blockList[nextBlockHashToSave].data;
+        return this.dbUtil.saveBlock(this.options.name, nextBlockToSave)
+            .then(function () {
+            _this.scope.shared.dbHeight = nextBlockToSave.height;
+            return Promise.resolve();
+        });
+    };
+    Blocks.prototype.calcBlockHeight = function (hash) {
+        var _this = this;
+        var nextBlock = this.blockList[hash].nextBlock;
+        var height = this.blockList[hash].height;
+        if (nextBlock !== undefined &&
+            nextBlock !== 'undefined' && // TODO is this a bug?
+            height !== undefined) {
+            var nextHeight_1 = height + 1;
+            this.blockList[nextBlock].height = nextHeight_1;
+            this.lastBlockChecked = hash;
+            if (nextHeight_1 > this.scope.shared.internalHeight) {
+                // this.scope.shared.internalHeight = nextHeight;
+                if (this.blocksInFlight[nextBlock]) {
+                    delete this.blocksInFlight[nextBlock];
                 }
-                else if (currentHeight >= _this.scope.shared.externalHeight && !inFlight) {
-                    if (!_this.scope.shared.synced) {
-                        _this.requestBlocksFromPeer(currentHeight);
-                        _this.scope.shared.synced = true;
-                    }
-                    _this.util.log('block', 'info', _this.options.name + ' chain fully synced');
-                }
+                this.util.log('block', 'info', ['new block', nextHeight_1, nextBlock].join(' - '));
             }
-        }, 500);
+            if (this.scope.shared.synced && nextHeight_1 > this.scope.shared.externalHeight) {
+                this.scope.shared.externalHeight = nextHeight_1;
+                return this.saveNextBlock()
+                    .then(function () {
+                    _this.scope.shared.internalHeight = nextHeight_1;
+                    return _this.calcBlockHeight(nextBlock);
+                });
+            }
+            // save to db, then move on
+            if (height > this.scope.shared.internalHeight &&
+                height < this.scope.shared.externalHeight - this.confirmationThreshold - 1) {
+                var block = this.blockList[hash].data;
+                block.height = height;
+                block.nextBlock = this.blockList[hash].nextBlock;
+                this.util.log('block', 'info', ['saving block', height].join(' - '));
+                return this.dbUtil.saveBlock(this.options.name, block)
+                    .then(function () {
+                    _this.scope.shared.dbHeight = height;
+                    _this.scope.shared.internalHeight = height;
+                    return _this.calcBlockHeight(nextBlock);
+                });
+            }
+            this.scope.shared.internalHeight = nextHeight_1;
+            return this.calcBlockHeight(nextBlock);
+        }
+        return Promise.resolve();
     };
     Blocks.prototype.groomBlockList = function () {
         var _this = this;
@@ -141,41 +202,8 @@ var Blocks = /** @class */ (function () {
                 };
             }
         });
-        // determine block numbers
-        var calcHeight = function (hash) {
-            var nextBlock = _this.blockList[hash].nextBlock;
-            var height = _this.blockList[hash].height;
-            if (nextBlock !== undefined &&
-                nextBlock !== 'undefined' &&
-                height !== undefined) {
-                var nextHeight = height + 1;
-                _this.blockList[nextBlock].height = nextHeight;
-                _this.lastBlockChecked = hash;
-                if (nextHeight > _this.scope.shared.internalHeight) {
-                    // this.scope.shared.internalHeight = nextHeight;
-                    if (_this.blocksInFlight[nextBlock]) {
-                        delete _this.blocksInFlight[nextBlock];
-                    }
-                    _this.util.log('block', 'info', ['new block', nextHeight, nextBlock].join(' - '));
-                    // console.log({...{hash: nextBlock}, ...this.blockList[nextBlock]});
-                }
-                // save to db, then move on
-                if (height > _this.scope.shared.internalHeight &&
-                    height < _this.scope.shared.externalHeight - 100) {
-                    var block = _this.blockList[hash].data;
-                    block.height = height;
-                    block.nextBlock = _this.blockList[hash].nextBlock;
-                    return _this.dbUtil.saveBlock(_this.options.name, block)
-                        .then(function () {
-                        _this.scope.shared.internalHeight = height;
-                        calcHeight(nextBlock);
-                    });
-                }
-                return calcHeight(nextBlock);
-            }
-            return Promise.resolve();
-        };
-        return calcHeight(this.lastBlockChecked);
+        // determine block numbers and save blocks
+        return this.calcBlockHeight(this.lastBlockChecked);
     };
     Blocks.prototype.updateBlockInFlight = function (hash) {
         this.blocksInFlight[hash] = true;
@@ -206,6 +234,9 @@ var Blocks = /** @class */ (function () {
             var blockHeight = this.blockList[block.prevBlock].height;
             blockHeight++;
             this.blockList[block.hash].height = blockHeight;
+        }
+        if (this.scope.shared.synced) {
+            this.groomBlockList();
         }
     };
     Blocks.prototype.updateBlockListWithInv = function (blockInv) {

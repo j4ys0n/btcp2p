@@ -7,7 +7,7 @@ var general_util_1 = require("../util/general.util");
 var db_util_1 = require("../util/db.util");
 var message_handlers_1 = require("./message.handlers");
 var block_handler_1 = require("../blocks/block-handler");
-var transactions_1 = require("../transactions/transactions");
+var transaction_handler_1 = require("../transactions/transaction-handler");
 var peers_1 = require("../peers/peers");
 var readFlowingBytes = function (stream, amount, preRead, callback) {
     var buff = (preRead) ? preRead : Buffer.from([]);
@@ -53,7 +53,7 @@ var Message = /** @class */ (function () {
         //https://github.com/bitcoin/bips/blob/master/bip-0037.mediawiki#extensions-to-existing-messages
         this.relayTransactions = Buffer.from('0x00', 'hex'); // false by default
         this.commands = this.messageConsts.commands;
-        this.magic = Buffer.from(this.options.magic, 'hex');
+        this.magic = Buffer.from(this.options.network.magic, 'hex');
         try {
             this.magicInt = this.magic.readUInt32LE(0);
         }
@@ -68,7 +68,7 @@ var Message = /** @class */ (function () {
         }
         this.handlers = new message_handlers_1.MessageHandlers(this.scope, this.util, this.dbUtil, this.options);
         this.blockHandler = new block_handler_1.BlockHandler(this.scope, this.util, this.dbUtil, this.options);
-        this.transactions = new transactions_1.Transactions(this.scope, this.util, this.dbUtil, this.options);
+        this.transactionHandler = new transaction_handler_1.TransactionHandler(this.scope, this.util, this.dbUtil, this.options);
         this.peerHandler = new peers_1.PeerHandler(this.scope);
     }
     Message.prototype.sendMessage = function (command, payload) {
@@ -84,7 +84,7 @@ var Message = /** @class */ (function () {
     Message.prototype.sendVersion = function () {
         // https://en.bitcoin.it/wiki/Protocol_documentation#version
         var payload = Buffer.concat([
-            this.util.packUInt32LE(this.options.protocolVersion),
+            this.util.packUInt32LE(this.options.network.protocolVersion),
             this.networkServices,
             this.util.packInt64LE(Date.now() / 1000 | 0),
             this.emptyNetAddress,
@@ -124,7 +124,7 @@ var Message = /** @class */ (function () {
         var headerHashes = Buffer.from(this.util.reverseHexBytes(hash), 'hex');
         var stopHash = Buffer.from(this.util.stopHash(32));
         var payload = Buffer.concat([
-            this.util.packUInt32LE(this.options.protocolVersion),
+            this.util.packUInt32LE(this.options.network.protocolVersion),
             hashCount,
             headerHashes,
             stopHash
@@ -232,7 +232,6 @@ var Message = /** @class */ (function () {
             case this.commands.version.toString():
                 this.handlers.handleVersion(payload)
                     .then(function (version) {
-                    // console.log(version);
                     _this.sendVerack();
                 });
                 break;
@@ -268,7 +267,10 @@ var Message = /** @class */ (function () {
                 this.blockHandler.handleBlock(payload);
                 break;
             case this.commands.tx.toString():
-                this.transactions.handleTransaction(payload);
+                this.transactionHandler.handleTransaction(payload);
+                break;
+            case this.commands.notfound.toString():
+                this.handlers.handleNotFound(payload);
                 break;
             default:
                 // nothing

@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { Utils } from '../util/general.util';
 import { DbUtil } from '../util/db.util';
 import { Blocks } from './blocks';
@@ -10,7 +11,7 @@ export declare class BlockHandler {
     private options;
     blocks: Blocks;
     private blockParser;
-    private transactions;
+    private transactionParser;
     constructor(scope: ProtocolScope, util: Utils, dbUtil: DbUtil, options: StartOptions);
     handleBlockInv(payload: Buffer): void;
     handleBlock(payload: Buffer): void;
