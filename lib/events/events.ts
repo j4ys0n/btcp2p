@@ -7,6 +7,10 @@ import {
   AddressEvent
 } from '../interfaces/events.interface';
 
+import {
+  Block, BlockZcash
+} from '../interfaces/blocks.interface'
+
 export interface EventsScope {
   client: boolean;
   server: boolean;
@@ -107,11 +111,11 @@ export class Events {
     this.sentMessageDispatcher.clear();
   }
   // block notify
-  private blockDispatcher = new EventDispatcher<BlockNotifyEvent>();
-  private onBlock(handler: Handler<BlockNotifyEvent>): void {
+  private blockDispatcher = new EventDispatcher<Block | BlockZcash>();
+  private onBlock(handler: Handler<Block | BlockZcash>): void {
     this.blockDispatcher.register(handler);
   }
-  private fireBlock(event: BlockNotifyEvent): void {
+  private fireBlock(event: Block | BlockZcash): void {
     this.blockDispatcher.fire(event);
   }
   public clearBlock(): void {
