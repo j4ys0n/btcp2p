@@ -1,11 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto = require("crypto");
+var LOG_LEVELS = {
+    'debug': 0,
+    'info': 1,
+    'warn': 2,
+    'error': 3
+};
 var Utils = /** @class */ (function () {
     function Utils() {
+        this.logLevel = 1;
     }
     Utils.prototype.log = function (component, level, message) {
-        console.log('[' + component + '] [' + level + ']\t' + message);
+        if (LOG_LEVELS[level] >= this.logLevel) {
+            console.log('[' + component + '] [' + level + ']\t' + message);
+        }
     };
     Utils.prototype.sha256 = function (buffer) {
         var hash1 = crypto.createHash('sha256');
