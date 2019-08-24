@@ -8,6 +8,7 @@ export interface SentMessageEvent {
 export interface PeerMessageEvent {
   command: string;
   payload?: any;
+  data?: Buffer;
 }
 export interface BlockNotifyEvent {
   hash: string;
