@@ -25,7 +25,6 @@ Everything is little endian unless otherwise noted
     * txWitnessLength: (var int)
     * txWitness: (bytes = txWitnessLength)
   * lockTime: (4 bytes) 32 bit uint
-  * nExpiryHeight (4 bytes) 32 bit uint
 
 
 #### Zcash
