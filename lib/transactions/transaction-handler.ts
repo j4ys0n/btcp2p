@@ -38,7 +38,9 @@ export class TransactionHandler {
 
   handleTransaction(payload: Buffer): void {
     const p = new MessageParser(payload);
-    const tx = this.transactionParser.parseTransactions(p, 1);
+    // TODO is this timestamp good?
+    const time = Math.floor(Date.now() / 1000);
+    const tx = this.transactionParser.parseTransactions(p, 1, time);
     this.scope.events.fire('tx', tx);
     // TODO
     // save tx to mempool

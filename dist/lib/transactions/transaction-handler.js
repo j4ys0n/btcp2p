@@ -27,7 +27,9 @@ var TransactionHandler = /** @class */ (function () {
     };
     TransactionHandler.prototype.handleTransaction = function (payload) {
         var p = new crypto_binary_1.MessageParser(payload);
-        var tx = this.transactionParser.parseTransactions(p, 1);
+        // TODO is this timestamp good?
+        var time = Math.floor(Date.now() / 1000);
+        var tx = this.transactionParser.parseTransactions(p, 1, time);
         this.scope.events.fire('tx', tx);
         // TODO
         // save tx to mempool

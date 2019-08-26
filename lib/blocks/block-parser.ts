@@ -116,7 +116,7 @@ export class BlockParser {
     const hashMerkleRoot = mParser.raw(32).reverse().toString('hex');
     const timestamp = mParser.readUInt32LE();
     const bits = mParser.raw(4).reverse().toString('hex');
-    const nonce = mParser.raw(32).reverse().toString('hex');
+    const nonce = mParser.readUInt32LE();
     const bytesEnd = mParser.pointerPosition();
     const rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
     const hash = this.util.sha256d(rawBytes).reverse().toString('hex');

@@ -9,8 +9,8 @@ export declare class TransactionParser {
     private addressUtil;
     constructor(util: Utils, options: StartOptions);
     parseTransactionInv(payload: Buffer): TxInvEvent;
-    parseTransactions(mParser: any, count?: number): Array<BitcoinTransaction | ZcashTransaction>;
-    parseBitcoinTransactions(mParser: any, count: number): Array<BitcoinTransaction>;
+    parseTransactions(mParser: any, count: number | undefined, blockTime: number): Array<BitcoinTransaction | ZcashTransaction>;
+    parseBitcoinTransactions(mParser: any, count: number, blockTime: number): Array<BitcoinTransaction>;
     parseZcashTransactions(mParser: any, count: number): Array<ZcashTransaction>;
     parseWitnesses(mParser: any, witnessFlag: boolean): Array<string>;
     parseTransparentInputs(mParser: any): Array<TxInput>;

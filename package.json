@@ -8,7 +8,8 @@
     "build": "tsc",
     "lint": "tslint -c tslint.json",
     "lintfix": "tslint -c tslint.json --fix",
-    "test": "NODE_ENV=test nyc mocha node --max_old_space_size=8192 -r ts-node/register test/**/*.ts"
+    "test": "NODE_ENV=test nyc mocha node --max_old_space_size=8192 -r ts-node/register test/**/*.ts",
+    "unit-test": "NODE_ENV=test nyc mocha node --max_old_space_size=8192 -r ts-node/register test/unit-tests.ts"
   },
   "nyc": {
     "include": [

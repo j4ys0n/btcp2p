@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto_binary_1 = require("crypto-binary");
 var address_util_1 = require("../util/address.util");
+var SEGWIT_ACTIVATION_EPOCH = 1503539857; // height = 481824
 var TransactionParser = /** @class */ (function () {
     function TransactionParser(util, options) {
         this.util = util;
@@ -21,34 +22,33 @@ var TransactionParser = /** @class */ (function () {
         };
         return txInv;
     };
-    TransactionParser.prototype.parseTransactions = function (mParser, count) {
+    TransactionParser.prototype.parseTransactions = function (mParser, count, blockTime) {
         if (count === void 0) { count = 0; }
         if (count === 0) {
             count = mParser.readVarInt();
         }
         switch (this.options.network.protocol) {
             case 'bitcoin':
-                return this.parseBitcoinTransactions(mParser, count);
+                return this.parseBitcoinTransactions(mParser, count, blockTime);
             case 'zcash':
                 return this.parseZcashTransactions(mParser, count);
         }
         return [];
     };
-    TransactionParser.prototype.parseBitcoinTransactions = function (mParser, count) {
+    TransactionParser.prototype.parseBitcoinTransactions = function (mParser, count, blockTime) {
         var txes = [];
         for (var i = 0; i < count; i++) {
             var bytesStart = mParser.pointerPosition();
             var version = mParser.raw(4).reverse().toString('hex');
-            var witnessFlag = (mParser.raw(2).reverse().toString('hex') === '0001') ?
-                true : false;
+            var witnessFlag = (mParser.readInt8() === 1 &&
+                blockTime >= SEGWIT_ACTIVATION_EPOCH) ? true : false;
             if (!witnessFlag) {
-                mParser.incrPointer(-2);
+                mParser.incrPointer(-1);
             }
             var txIn = this.parseTransparentInputs(mParser);
             var txOut = this.parseTransparentOutputs(mParser);
             var witnesses = this.parseWitnesses(mParser, witnessFlag);
             var lockTime = mParser.readUInt32LE();
-            var nExpiryHeight = mParser.readUInt32LE();
             var bytesEnd = mParser.pointerPosition();
             var rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
             var txid = this.util.sha256d(rawBytes).reverse().toString('hex');
@@ -58,8 +58,7 @@ var TransactionParser = /** @class */ (function () {
                 txIn: txIn,
                 txOut: txOut,
                 witnesses: witnesses,
-                lockTime: lockTime,
-                nExpiryHeight: nExpiryHeight
+                lockTime: lockTime
             };
             txes.push(tx);
         }
@@ -131,6 +130,7 @@ var TransactionParser = /** @class */ (function () {
                 outpointIndex: mParser.readUInt32LE(),
                 signatureScript: mParser.raw(mParser.readVarInt()).reverse().toString('hex'),
                 sequence: mParser.raw(4).reverse().toString('hex')
+                // or sequence: mParser.readUInt32LE()
             };
             inputs.push(input);
         }

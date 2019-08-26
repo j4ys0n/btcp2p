@@ -10,6 +10,8 @@ import {
   ShieldedInputs, ShieldedOutputs
 } from '../interfaces/transactions.interface';
 
+const SEGWIT_ACTIVATION_EPOCH = 1503539857; // height = 481824
+
 export class TransactionParser {
   private addressUtil: AddressUtil;
   constructor(
@@ -33,34 +35,35 @@ export class TransactionParser {
     return txInv
   }
 
-  parseTransactions(mParser: any, count: number = 0): Array<BitcoinTransaction | ZcashTransaction> {
+  parseTransactions(mParser: any, count: number = 0, blockTime: number): Array<BitcoinTransaction | ZcashTransaction> {
     if (count === 0) {
       count = mParser.readVarInt();
     }
     switch (this.options.network.protocol) {
       case 'bitcoin':
-        return this.parseBitcoinTransactions(mParser, count);
+        return this.parseBitcoinTransactions(mParser, count, blockTime);
       case 'zcash':
         return this.parseZcashTransactions(mParser, count);
     }
     return [];
   }
 
-  parseBitcoinTransactions(mParser: any, count: number): Array<BitcoinTransaction> {
+  parseBitcoinTransactions(mParser: any, count: number, blockTime: number): Array<BitcoinTransaction> {
     const txes: Array<any> = [];
     for (let i = 0; i < count; i ++) {
       const bytesStart = mParser.pointerPosition();
       const version = mParser.raw(4).reverse().toString('hex');
-      const witnessFlag = (mParser.raw(2).reverse().toString('hex') === '0001') ?
-        true : false;
+      const witnessFlag = (
+        mParser.readInt8() === 1 &&
+        blockTime >= SEGWIT_ACTIVATION_EPOCH
+      ) ? true : false;
       if (!witnessFlag) {
-        mParser.incrPointer(-2);
+        mParser.incrPointer(-1);
       }
       const txIn = this.parseTransparentInputs(mParser);
       const txOut = this.parseTransparentOutputs(mParser);
       const witnesses = this.parseWitnesses(mParser, witnessFlag);
       const lockTime = mParser.readUInt32LE();
-      const nExpiryHeight = mParser.readUInt32LE();
 
       const bytesEnd = mParser.pointerPosition();
       const rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
@@ -72,8 +75,7 @@ export class TransactionParser {
         txIn,
         txOut,
         witnesses,
-        lockTime,
-        nExpiryHeight
+        lockTime
       }
       txes.push(tx);
     }
@@ -151,6 +153,7 @@ export class TransactionParser {
         outpointIndex: mParser.readUInt32LE(),
         signatureScript: mParser.raw(mParser.readVarInt()).reverse().toString('hex'),
         sequence: mParser.raw(4).reverse().toString('hex')
+        // or sequence: mParser.readUInt32LE()
       };
       inputs.push(input);
     }

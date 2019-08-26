@@ -53,7 +53,7 @@ export class BlockHandler {
     const blockHeader: BlockHeader | BlockHeaderZcash = this.blockParser.parseHeader(p);
 
     // parse transactions
-    const txes: Array<BitcoinTransaction | ZcashTransaction> = this.transactionParser.parseTransactions(p);
+    const txes: Array<BitcoinTransaction | ZcashTransaction> = this.transactionParser.parseTransactions(p, 0, blockHeader.timestamp);
     const block: Block | BlockZcash = {...blockHeader, ...{transactions: txes}};
     this.scope.events.fire('block', block);
     if (!this.options.skipBlockDownload) {

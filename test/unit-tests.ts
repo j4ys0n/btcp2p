@@ -7,7 +7,7 @@ import { MessageParser } from 'crypto-binary';
 import { BTCP2P } from '../lib/btcp2p';
 import { MessageConsts } from '../lib/message/message.consts';
 import {
-  DisconnectEvent, RejectedEvent, PeerMessageEvent, HeadersEvent, BlockNotifyEvent
+  RejectedEvent
 } from '../lib/interfaces/events.interface';
 
 import {
@@ -15,7 +15,10 @@ import {
 } from '../lib/interfaces/blocks.interface';
 
 import { TransactionParser } from '../lib/transactions/transaction-parser';
+import { BlockParser } from '../lib/blocks/block-parser';
 import { Utils } from '../lib/util/general.util';
+
+import { bitcoinBlock } from './fixtures'
 
 const unitTestOptions = {
   name: 'arrow',
@@ -43,9 +46,9 @@ const integrationTestOptionsBTC = {
   port: 8333,
   startServer: false,
   relayTransactions: false,
-  persist: false,
+  persist: true,
   fetchMempool: false,
-  skipBlockDownload: false,
+  skipBlockDownload: true,
   network: {
     protocol: 'bitcoin',
     magic: 'f9beb4d9',
@@ -57,24 +60,6 @@ const integrationTestOptionsBTC = {
   }
 };
 
-const integrationTestOptionsARW = {
-  name: 'arrow',
-  host: 'localhost',
-  port: 7654,
-  startServer: false,
-  relayTransactions: false,
-  persist: false,
-  fetchMempool: false,
-  network: {
-    protocol: 'zcash',
-    magic: '27a2261c',
-    genesisTarget: '1f07ffff',
-    genesisHash: '00028de97cd7b8e1b90918186387c0e6b9f65ac433bdde036aa93e184593da4e',
-    protocolVersion: 170007,
-    pubKeyVersion: 0,
-    scriptVersion: 5
-  }
-};
 
 class BTCP2PTest extends BTCP2P {
   public util;
@@ -84,6 +69,8 @@ describe('Unit tests', () => {
   let btcp2p: BTCP2PTest;
   let firstPingDone = false;
   let messageConsts: MessageConsts;
+  let blockMP: any;
+  const utils = new Utils();
   before((done) => {
     btcp2p = new BTCP2PTest(unitTestOptions);
     messageConsts = new MessageConsts(btcp2p.util);
@@ -103,6 +90,8 @@ describe('Unit tests', () => {
       clientConnected = true;
       serverStartedAndClientConnected();
     })
+
+    blockMP = new MessageParser(Buffer.from(bitcoinBlock.bytes, 'hex'));
   });
 
   describe('internal methods', () => {
@@ -208,10 +197,9 @@ describe('Unit tests', () => {
     });
 
     it('should decode a transaction', (done) => {
-      const utils = new Utils();
-      const txparser = new TransactionParser(utils, integrationTestOptionsARW)
+      const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
       const p = new MessageParser(Buffer.from('0100000001baa5ec1b07ab16b8c1b55b27d703e012f59693ff1ffddc91a6e4502bb38ad85b0100000000ffffffff01c0a1fc53020000001976a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088aca8f80800', 'hex'));
-      const txes = txparser.parseBitcoinTransactions(p, 1)
+      const txes = txparser.parseBitcoinTransactions(p, 1, 1503539856)
       // console.log(txes);
       expect(txes[0].txOut[0].pkScript).to.be.equal('76a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088ac');
       done();
@@ -231,6 +219,26 @@ describe('Unit tests', () => {
       btcp2p.client.message.sendAddr(ip, port);
     });
 
+    it('should decode a bitcoin block header', (done) => {
+      const blkParser = new BlockParser(integrationTestOptionsBTC, utils);
+      const blockHeader = blkParser.parseHeader(blockMP);
+      expect(blockHeader.hash).to.be.equal(bitcoinBlock.hash);
+      expect(blockHeader.prevBlock).to.be.equal(bitcoinBlock.prevBlock);
+      expect(blockHeader.hashMerkleRoot).to.be.equal(bitcoinBlock.hashMerkleRoot);
+      done();
+    });
+
+    it('should decode bitcoin transactions in a block', (done) => {
+      const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
+      const transactions = txparser.parseTransactions(blockMP, 0, bitcoinBlock.time)
+      // console.log(transactions.length)
+      expect(transactions.length).to.be.equal(bitcoinBlock.transactions.total);
+      expect(transactions[0].txid).to.be.equal(bitcoinBlock.transactions[0].txid);
+      expect(transactions[1].txid).to.be.equal(bitcoinBlock.transactions[1].txid);
+      expect(transactions[232].txid).to.be.equal(bitcoinBlock.transactions[232].txid);
+      done();
+    })
+
   })
 
   after((done) => {
@@ -241,95 +249,4 @@ describe('Unit tests', () => {
       done();
     });
   });
-});
-
-describe('Integration Tests', () => {
-  let btcp2p: BTCP2PTest;
-  // before((done) => {
-  //   btcp2p = new BTCP2PTest(integrationTestOptions);
-  //   done();
-  // })
-
-  it('should connect to arrowd, request blocks, then disconnect', (done) => {
-    btcp2p = new BTCP2PTest(integrationTestOptionsARW);
-    let nextHash = '';
-    btcp2p.client.on('peer_message', (e: PeerMessageEvent) => {
-      console.log('peer_message', e);
-    });
-    btcp2p.client.on('sent_message', (e: PeerMessageEvent) => {
-      console.log('sent_message', e);
-    });
-    btcp2p.client.on('error', (e: any) => {
-      console.log(e)
-    })
-    btcp2p.client.on('blockinv', (e: any) => {
-      btcp2p.client.events.clearBlockInv();
-      // console.log(e)
-      // expect(e[0].parsed.hash).to.be.equal(nextHash);
-      // btcp2p.client.socket.end();
-    });
-    btcp2p.client.on('block', (e: Block) => {
-
-    });
-    btcp2p.client.on('getheaders', (e: any) => {
-      btcp2p.client.events.clearGetHeaders();
-      nextHash = e.parsed.hashes[0];
-      console.log('requesting:', e.parsed.hashes[1]);
-      console.log('next:', nextHash);
-      // btcp2p.client.message.sendGetBlocks(e.parsed.hashes[1]);
-      // btcp2p.client.message.sendGetBlocks('000546eeffe7cc9daa9e69a21d1b0ee50953748a4d788f690de9ecff4494b838')
-    });
-    btcp2p.client.on('headers', (e: HeadersEvent) => {
-      console.log('headers')
-      console.log(e)
-    })
-    // btcp2p.client.on('connect', (e: ConnectEvent) => {
-    //   btcp2p.client.events.clearConnect();
-    //   setTimeout(() => {
-    //     btcp2p.client.socket.end();
-    //   }, 2000);
-    // });
-    btcp2p.client.on('disconnect', (e: DisconnectEvent) => {
-      btcp2p.client.events.clearDisconnect();
-      setTimeout(() => {
-        done();
-      }, 3000);
-    });
-    btcp2p.client.on('block', (e: any) => {
-      // console.log(e)
-    })
-
-    btcp2p.client.on('connect', (e: any) => {
-      // btcp2p.client.message.sendMessage(
-      //   btcp2p.client.message.commands.mempool,
-      //   Buffer.from([])
-      // )
-      console.log('** connected!')
-      // setTimeout(() => {
-      //   btcp2p.client.socket.end();
-      // }, 30000)
-    })
-  });
-
-
-  // it('should connect to litecoin, get addresses then disconnect', (done) => {
-  //   btcp2p = new BTCP2PTest(integrationTestOptions);
-  //
-  //   btcp2p.onClient('peer_message', (e: PeerMessageEvent) => {
-  //     console.log(e);
-  //   });
-  //   btcp2p.onClient('connect', (e: ConnectEvent) => {
-  //     btcp2p.message.sendGetAddr(btcp2p.clientEvents, btcp2p.clientSocket);
-  //   });
-  //   btcp2p.onClient('addr', (e) => {
-  //     btcp2p.clientSocket.end();
-  //   })
-  //   btcp2p.onClient('disconnect', (e: DisconnectEvent) => {
-  //     done();
-  //   });
-  // });
-
-  // after(() => {
-  //   btcp2p.client.socket.destroy();
-  // });
 });

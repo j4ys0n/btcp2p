@@ -5,10 +5,10 @@ export type BitcoinTransaction = {
   txOut: Array<TxOutput>;
   witnesses?: any;
   lockTime: number;
-  nExpiryHeight: number;
 }
 
 export type ZcashTransaction = {
+  nExpiryHeight: number;
   saplingValueBalance: number;
   shieldedInputs: Array<ShieldedInputs>;
   shieldedOutputs: Array<ShieldedOutputs>;
