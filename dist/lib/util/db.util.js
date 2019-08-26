@@ -37,8 +37,10 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var path = require("path");
 var Datastore = require("nestdb");
+var general_util_1 = require("../util/general.util");
 var DbUtil = /** @class */ (function () {
     function DbUtil() {
+        this.util = new general_util_1.Utils();
         this.datastores = {};
     }
     DbUtil.prototype.getCollection = function (options, index) {
@@ -98,11 +100,33 @@ var DbUtil = /** @class */ (function () {
             // save tx to mempool collection
         });
     };
-    DbUtil.prototype.saveBlock = function (name, block) {
+    DbUtil.prototype.deleteBlockFromHold = function (name, hash) {
+        var _this = this;
         var blocks = this.getCollection({
             name: name + '-blocks',
-            persistent: true
+            persistent: false
         }, { fieldName: 'hash', unique: true });
+        return new Promise(function (resolve, reject) {
+            blocks.then(function (ds) {
+                ds.remove({ hash: hash }, function (err, doc) {
+                    if (err) {
+                        reject(err);
+                    }
+                    _this.util.log('db', 'info', hash + ' removed hold');
+                    resolve(doc);
+                });
+            });
+        });
+    };
+    DbUtil.prototype.saveBlock = function (name, block, confirmed) {
+        if (confirmed === void 0) { confirmed = true; }
+        var blocks = this.getCollection({
+            name: name + '-blocks',
+            persistent: confirmed
+        }, { fieldName: 'hash', unique: true });
+        if (confirmed) {
+            this.deleteBlockFromHold(name, block.hash);
+        }
         return new Promise(function (resolve, reject) {
             blocks.then(function (ds) {
                 ds.insert(block, function (err, doc) {

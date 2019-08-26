@@ -23,6 +23,7 @@ export declare class Blocks {
     chainFullySynced(height: number): void;
     saveNextBlock(): Promise<any>;
     calcBlockHeight(hash: string): Promise<any>;
+    prepareBlockAndSave(hash: string, height: number, nextBlock: string, keep?: boolean): Promise<any>;
     groomBlockList(): Promise<any>;
     updateBlockInFlight(hash: string): void;
     updateBlockList(block: any): void;

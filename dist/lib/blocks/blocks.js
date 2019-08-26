@@ -164,21 +164,38 @@ var Blocks = /** @class */ (function () {
             console.log('height', height, 'internalHeight', this.scope.shared.internalHeight, 'externalHeight', this.scope.shared.externalHeight);
             if (height > this.scope.shared.internalHeight &&
                 height < this.scope.shared.externalHeight - this.confirmationThreshold - 1) {
-                var block = this.blockList[hash].data;
-                block.height = height;
-                block.nextBlock = this.blockList[hash].nextBlock;
-                this.util.log('block', 'info', ['saving block', height].join(' - '));
-                return this.dbUtil.saveBlock(this.options.name, block)
-                    .then(function () {
-                    _this.scope.shared.dbHeight = height;
-                    _this.scope.shared.internalHeight = height;
-                    return _this.calcBlockHeight(nextBlock);
-                });
+                // TODO how can it get here if data not set?
+                if (this.blockList[hash].data !== undefined) {
+                    return this.prepareBlockAndSave(hash, height, nextBlock);
+                }
+                return Promise.resolve();
+            }
+            else if (height > this.scope.shared.internalHeight &&
+                height >= this.scope.shared.externalHeight - this.confirmationThreshold - 1) {
+                // TODO how can it get here if data not set?
+                if (this.blockList[hash].data !== undefined) {
+                    return this.prepareBlockAndSave(hash, height, nextBlock, false);
+                }
+                return Promise.resolve();
             }
             this.scope.shared.internalHeight = height;
             return this.calcBlockHeight(nextBlock);
         }
         return Promise.resolve();
+    };
+    Blocks.prototype.prepareBlockAndSave = function (hash, height, nextBlock, keep) {
+        var _this = this;
+        if (keep === void 0) { keep = true; }
+        var block = this.blockList[hash].data;
+        block.height = height;
+        block.nextBlock = this.blockList[hash].nextBlock;
+        this.util.log('block', 'info', ['saving block', height].join(' - '));
+        return this.dbUtil.saveBlock(this.options.name, block, keep)
+            .then(function () {
+            _this.scope.shared.dbHeight = height;
+            _this.scope.shared.internalHeight = height;
+            return _this.calcBlockHeight(nextBlock);
+        });
     };
     Blocks.prototype.groomBlockList = function () {
         var _this = this;

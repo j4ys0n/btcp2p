@@ -189,21 +189,38 @@ export class Blocks {
         height > this.scope.shared.internalHeight &&
         height < this.scope.shared.externalHeight - this.confirmationThreshold - 1
       ) {
-        const block = <Block | BlockZcash>this.blockList[hash].data;
-        block.height = height;
-        block.nextBlock = this.blockList[hash].nextBlock;
-        this.util.log('block', 'info', ['saving block',height].join(' - '));
-        return this.dbUtil.saveBlock(this.options.name, block)
-        .then((): Promise<any> => {
-          this.scope.shared.dbHeight = height;
-          this.scope.shared.internalHeight = height;
-          return this.calcBlockHeight(nextBlock);
-        });
+        // TODO how can it get here if data not set?
+        if (this.blockList[hash].data !== undefined) {
+          return this.prepareBlockAndSave(hash, height, nextBlock);
+        }
+        return Promise.resolve();
+      } else if (
+        height > this.scope.shared.internalHeight &&
+        height >= this.scope.shared.externalHeight - this.confirmationThreshold - 1
+      ) {
+        // TODO how can it get here if data not set?
+        if (this.blockList[hash].data !== undefined) {
+          return this.prepareBlockAndSave(hash, height, nextBlock, false);
+        }
+        return Promise.resolve()
       }
       this.scope.shared.internalHeight = height;
       return this.calcBlockHeight(nextBlock);
     }
     return Promise.resolve();
+  }
+
+  prepareBlockAndSave(hash: string, height: number, nextBlock: string, keep: boolean = true): Promise<any> {
+    const block = <Block | BlockZcash>this.blockList[hash].data;
+    block.height = height;
+    block.nextBlock = this.blockList[hash].nextBlock;
+    this.util.log('block', 'info', ['saving block',height].join(' - '));
+    return this.dbUtil.saveBlock(this.options.name, block, keep)
+    .then((): Promise<any> => {
+      this.scope.shared.dbHeight = height;
+      this.scope.shared.internalHeight = height;
+      return this.calcBlockHeight(nextBlock);
+    });
   }
 
   groomBlockList(): Promise<any> {

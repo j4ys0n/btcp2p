@@ -1,6 +1,8 @@
 import * as path from 'path';
 import * as Datastore from 'nestdb';
 
+import { Utils } from '../util/general.util';
+
 import {
   Block, BlockZcash, BestBlock, ReducedBlockHeader
 } from '../interfaces/blocks.interface';
@@ -15,6 +17,7 @@ interface DatastoreList {
 }
 
 export class DbUtil {
+  protected util: Utils = new Utils();
   private  datastores: DatastoreList = {};
 
   constructor() {}
@@ -68,11 +71,32 @@ export class DbUtil {
     })
   }
 
-  saveBlock(name: string, block: Block | BlockZcash): Promise<any> {
+  deleteBlockFromHold(name: string, hash: string): Promise<any> {
     let blocks = this.getCollection({
       name: name + '-blocks',
-      persistent: true
+      persistent: false
     }, {fieldName: 'hash', unique: true});
+    return new Promise((resolve: any, reject: any) => {
+      blocks.then((ds: Datastore) => {
+        ds.remove({hash: hash}, (err: any, doc: any) => {
+          if (err) {
+            reject(err)
+          }
+          this.util.log('db', 'info', hash + ' removed hold')
+          resolve(doc)
+        })
+      })
+    })
+  }
+
+  saveBlock(name: string, block: Block | BlockZcash, confirmed: boolean = true): Promise<any> {
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: confirmed
+    }, {fieldName: 'hash', unique: true});
+    if (confirmed) {
+      this.deleteBlockFromHold(name, block.hash);
+    }
     return new Promise((resolve: any, reject: any) => {
       blocks.then((ds: Datastore) => {
         ds.insert(block, (err: any, doc: any) => {
