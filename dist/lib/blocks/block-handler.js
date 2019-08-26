@@ -43,7 +43,13 @@ var BlockHandler = /** @class */ (function () {
         // parse block header
         var blockHeader = this.blockParser.parseHeader(p);
         // parse transactions
-        var txes = this.transactionParser.parseTransactions(p, 0, blockHeader.timestamp);
+        var txes;
+        if (this.options.skipTransactions) {
+            txes = this.transactionParser.parseTransactions(p, 0, blockHeader.timestamp);
+        }
+        else {
+            txes = [];
+        }
         var block = __assign({}, blockHeader, { transactions: txes });
         this.scope.events.fire('block', block);
         if (!this.options.skipBlockDownload) {

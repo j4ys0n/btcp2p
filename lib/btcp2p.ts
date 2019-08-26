@@ -116,6 +116,10 @@ export class BTCP2P {
       this.restartClient(this.rejectedRetryPause);
     });
 
+    if (this.options.skipTransactions == undefined) {
+      this.options.skipTransactions = false;
+    }
+
     if (
       this.options.skipBlockDownload !== undefined &&
       this.options.skipBlockDownload !== false

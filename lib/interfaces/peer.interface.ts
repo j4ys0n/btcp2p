@@ -22,6 +22,7 @@ export interface StartOptions {
   persist: boolean;
   skipBlockDownload?: boolean;
   fetchMempool?: boolean;
+  skipTransactions?: boolean;
   network: NetworkOptions;
 }
 

@@ -94,6 +94,9 @@ var BTCP2P = /** @class */ (function () {
             _this.util.log('core', 'warn', 'client disconnected');
             _this.restartClient(_this.rejectedRetryPause);
         });
+        if (this.options.skipTransactions == undefined) {
+            this.options.skipTransactions = false;
+        }
         if (this.options.skipBlockDownload !== undefined &&
             this.options.skipBlockDownload !== false) {
             this.skipBlockDownload = true;

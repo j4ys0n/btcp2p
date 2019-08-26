@@ -17,26 +17,6 @@ import {
 import { TransactionParser } from '../lib/transactions/transaction-parser';
 import { Utils } from '../lib/util/general.util';
 
-const unitTestOptions = {
-  name: 'arrow',
-  host: 'localhost',
-  port: 3003,
-  serverPort: 3003,
-  startServer: true,
-  relayTransactions: false,
-  persist: false,
-  fetchMempool: false,
-  network: {
-    protocol: 'zcash',
-    magic: '27a2261c',
-    genesisTarget: '1f07ffff',
-    genesisHash: '00028de97cd7b8e1b90918186387c0e6b9f65ac433bdde036aa93e184593da4e',
-    protocolVersion: 170007,
-    pubKeyVersion: 0,
-    scriptVersion: 5
-  }
-};
-
 const integrationTestOptionsBTC = {
   name: 'bitcoin',
   host: '34.207.89.35',
