@@ -121,12 +121,15 @@ var Blocks = /** @class */ (function () {
         var _this = this;
         var nextBlockHeightToSave = this.scope.shared.dbHeight + 1;
         var nextBlockHashToSave = this.getBlockHashAtHeight(nextBlockHeightToSave);
-        var nextBlockToSave = this.blockList[nextBlockHashToSave].data;
-        return this.dbUtil.saveBlock(this.options.name, nextBlockToSave)
-            .then(function () {
-            _this.scope.shared.dbHeight = nextBlockToSave.height;
-            return Promise.resolve();
-        });
+        if (nextBlockHashToSave !== undefined) {
+            var nextBlockToSave = this.blockList[nextBlockHashToSave].data;
+            return this.dbUtil.saveBlock(this.options.name, nextBlockToSave)
+                .then(function () {
+                _this.scope.shared.dbHeight = nextBlockHeightToSave;
+                return Promise.resolve();
+            });
+        }
+        return Promise.reject(nextBlockHeightToSave);
     };
     Blocks.prototype.calcBlockHeight = function (hash) {
         var _this = this;
@@ -151,9 +154,14 @@ var Blocks = /** @class */ (function () {
                     .then(function () {
                     _this.scope.shared.internalHeight = nextHeight_1;
                     return _this.calcBlockHeight(nextBlock);
+                })
+                    .catch(function (error) {
+                    _this.util.log('block', 'warn', ['saveNextBlock, blockList[height].data not saved', error].join(' - '));
+                    return Promise.resolve();
                 });
             }
             // save to db, then move on
+            console.log('height', height, 'internalHeight', this.scope.shared.internalHeight, 'externalHeight', this.scope.shared.externalHeight);
             if (height > this.scope.shared.internalHeight &&
                 height < this.scope.shared.externalHeight - this.confirmationThreshold - 1) {
                 var block = this.blockList[hash].data;
@@ -167,7 +175,7 @@ var Blocks = /** @class */ (function () {
                     return _this.calcBlockHeight(nextBlock);
                 });
             }
-            this.scope.shared.internalHeight = nextHeight_1;
+            this.scope.shared.internalHeight = height;
             return this.calcBlockHeight(nextBlock);
         }
         return Promise.resolve();

@@ -39,13 +39,13 @@ const unitTestOptions = {
 
 const integrationTestOptionsBTC = {
   name: 'bitcoin',
-  host: 'localhost',
+  host: '34.207.89.35',
   port: 8333,
   startServer: false,
   relayTransactions: false,
   persist: false,
   fetchMempool: false,
-  skipBlockDownload: true,
+  skipBlockDownload: false,
   network: {
     protocol: 'bitcoin',
     magic: 'f9beb4d9',
@@ -209,7 +209,7 @@ describe('Unit tests', () => {
 
     it('should decode a transaction', (done) => {
       const utils = new Utils();
-      const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
+      const txparser = new TransactionParser(utils, integrationTestOptionsARW)
       const p = new MessageParser(Buffer.from('0100000001baa5ec1b07ab16b8c1b55b27d703e012f59693ff1ffddc91a6e4502bb38ad85b0100000000ffffffff01c0a1fc53020000001976a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088aca8f80800', 'hex'));
       const txes = txparser.parseBitcoinTransactions(p, 1)
       // console.log(txes);
@@ -251,7 +251,7 @@ describe('Integration Tests', () => {
   // })
 
   it('should connect to arrowd, request blocks, then disconnect', (done) => {
-    btcp2p = new BTCP2PTest(integrationTestOptionsBTC);
+    btcp2p = new BTCP2PTest(integrationTestOptionsARW);
     let nextHash = '';
     btcp2p.client.on('peer_message', (e: PeerMessageEvent) => {
       console.log('peer_message', e);
@@ -305,9 +305,9 @@ describe('Integration Tests', () => {
       //   Buffer.from([])
       // )
       console.log('** connected!')
-      setTimeout(() => {
-        btcp2p.client.socket.end();
-      }, 10000)
+      // setTimeout(() => {
+      //   btcp2p.client.socket.end();
+      // }, 30000)
     })
   });
 

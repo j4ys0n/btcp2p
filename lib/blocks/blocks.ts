@@ -138,14 +138,17 @@ export class Blocks {
   }
 
   saveNextBlock(): Promise<any> {
-    const nextBlockHeightToSave = this.scope.shared.dbHeight + 1;
-    const nextBlockHashToSave = this.getBlockHashAtHeight(nextBlockHeightToSave);
-    const nextBlockToSave = <Block | BlockZcash>this.blockList[nextBlockHashToSave].data;
-    return this.dbUtil.saveBlock(this.options.name, nextBlockToSave)
-    .then((): Promise<any> => {
-      this.scope.shared.dbHeight = <number>nextBlockToSave.height;
-      return Promise.resolve();
-    })
+    const nextBlockHeightToSave: number = this.scope.shared.dbHeight + 1;
+    const nextBlockHashToSave: string = this.getBlockHashAtHeight(nextBlockHeightToSave);
+    if (nextBlockHashToSave !== undefined) {
+      const nextBlockToSave = <Block | BlockZcash>this.blockList[nextBlockHashToSave].data;
+      return this.dbUtil.saveBlock(this.options.name, nextBlockToSave)
+      .then((): Promise<any> => {
+        this.scope.shared.dbHeight = nextBlockHeightToSave;
+        return Promise.resolve();
+      })
+    }
+    return Promise.reject(nextBlockHeightToSave)
   }
 
   calcBlockHeight(hash: string): Promise<any> {
@@ -168,14 +171,20 @@ export class Blocks {
       }
       if (this.scope.shared.synced && nextHeight > this.scope.shared.externalHeight) {
         this.scope.shared.externalHeight = nextHeight;
+
         return this.saveNextBlock()
         .then((): Promise<any> => {
           this.scope.shared.internalHeight = nextHeight;
           return this.calcBlockHeight(nextBlock);
         })
+        .catch((error: any) => {
+          this.util.log('block', 'warn', ['saveNextBlock, blockList[height].data not saved', error].join(' - '))
+          return Promise.resolve();
+        })
       }
 
       // save to db, then move on
+      console.log('height', height, 'internalHeight', this.scope.shared.internalHeight, 'externalHeight', this.scope.shared.externalHeight)
       if (
         height > this.scope.shared.internalHeight &&
         height < this.scope.shared.externalHeight - this.confirmationThreshold - 1
@@ -191,7 +200,7 @@ export class Blocks {
           return this.calcBlockHeight(nextBlock);
         });
       }
-      this.scope.shared.internalHeight = nextHeight;
+      this.scope.shared.internalHeight = height;
       return this.calcBlockHeight(nextBlock);
     }
     return Promise.resolve();

@@ -111,11 +111,7 @@ export class MessageHandlers {
 
       }
       if (type) {
-        this.scope.events.fire('peer_message', {
-          command: 'inv',
-          payload: {type: type},
-          data: payload
-        });
+        this.scope.events.fire('peer_message', {command: 'inv', payload: {type: type}});
       }
       switch (type) {
         case this.invCodes.error:
