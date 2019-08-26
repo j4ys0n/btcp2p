@@ -45,10 +45,10 @@ var BlockHandler = /** @class */ (function () {
         // parse transactions
         var txes;
         if (this.options.skipTransactions) {
-            txes = this.transactionParser.parseTransactions(p, 0, blockHeader.timestamp);
+            txes = [];
         }
         else {
-            txes = [];
+            txes = this.transactionParser.parseTransactions(p, 0, blockHeader.timestamp);
         }
         var block = __assign({}, blockHeader, { transactions: txes });
         this.scope.events.fire('block', block);
