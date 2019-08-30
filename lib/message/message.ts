@@ -296,10 +296,15 @@ export class Message {
       case this.commands.notfound.toString():
         this.handlers.handleNotFound(payload);
         break;
+      case this.commands.sendheaders.toString():
+        // TODO
+        break;
       default:
         // nothing
-        console.log(command);
-        console.log(payload);
+        this.scope.events.fire('error', {
+          message: 'unhandled peer message ' + command,
+          payload: payload
+        })
         break;
     }
   }
