@@ -8,7 +8,9 @@ const LOG_LEVELS = {
 }
 
 export class Utils {
-  public logLevel = 1;
+  constructor(public logLevel: number = 2) {
+
+  }
   public log(component: string, level: string, message: any) {
     if (LOG_LEVELS[level] >= this.logLevel) {
       console.log('['+ component +'] ['+ level +']\t' + message);
@@ -109,5 +111,24 @@ export class Utils {
       reversed = bytes.substr(i*2, 2) + reversed;
     }
     return reversed;
+  }
+
+  public promiseLoop(promise: Function, scope: any, promiseArgsArray: Array<any>, promiseArgs: Array<any> = [], indexesAsArgs: boolean = false): Promise<any> {
+    let index = 0;
+    const loop = (): Promise<any> => {
+      if (indexesAsArgs) {
+        promiseArgs = [index, promiseArgsArray.length]
+      }
+      const argsArray: Array<any> = [...[promiseArgsArray[index]], ...promiseArgs]
+      return promise.apply(scope, argsArray)
+      .then(() => {
+        index++;
+        if (index < promiseArgsArray.length) {
+          return loop();
+        }
+        return Promise.resolve();
+      });
+    };
+    return loop();
   }
 }

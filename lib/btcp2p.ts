@@ -5,6 +5,7 @@ import { Events } from './events/events';
 import { Utils } from './util/general.util';
 import { DbUtil } from './util/db.util';
 import { Message } from './message/message';
+import { API } from './api/api';
 
 // interface imports
 import { StartOptions, ProtocolScope, Version } from './interfaces/peer.interface';
@@ -26,6 +27,7 @@ export class BTCP2P {
   private serverStarting: boolean = false;
   private serverStarted: boolean = false;
   private serverPort!: number;
+  private api!: API;
   private supportedProtocols: Array<string> = ['bitcoin', 'zcash'];
 
   private message!: Message; // for instantiation to avoid 'possibly undefined error'
@@ -59,7 +61,7 @@ export class BTCP2P {
     }
   }
 
-  protected util: Utils = new Utils();
+  protected util: Utils;
   protected dbUtil: DbUtil = new DbUtil();
 
   private pings: any;
@@ -79,6 +81,8 @@ export class BTCP2P {
   private skipBlockDownload = false;
   private saveMempool = false;
 
+  private defaultApiPort = 8080;
+
   /**
    * @param options: StartOptions = {
    *  name: string,
@@ -95,6 +99,9 @@ export class BTCP2P {
    */
 
   constructor(private options: StartOptions) {
+    this.util = new Utils(
+      this.options.logLevel || 2
+    )
     if (!!this.options.serverPort) {
       this.serverPort = this.options.serverPort;
     } else {
@@ -151,6 +158,13 @@ export class BTCP2P {
     } else {
       // if no server to start, just init connection
       this.initConnection();
+    }
+
+    if (this.options.api) {
+      if (this.options.apiPort === undefined) {
+        this.options.apiPort = this.defaultApiPort;
+        this.api = new API(this.options.apiPort);
+      }
     }
   }
 

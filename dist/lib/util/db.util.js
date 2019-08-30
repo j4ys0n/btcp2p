@@ -42,6 +42,7 @@ var DbUtil = /** @class */ (function () {
     function DbUtil() {
         this.util = new general_util_1.Utils();
         this.datastores = {};
+        this.onHold = {};
     }
     DbUtil.prototype.getCollection = function (options, index) {
         if (index === void 0) { index = undefined; }
@@ -100,6 +101,25 @@ var DbUtil = /** @class */ (function () {
             // save tx to mempool collection
         });
     };
+    DbUtil.prototype.getHeldBlocks = function (name) {
+        var blocks = this.getCollection({
+            name: name + '-blocks',
+            persistent: false
+        }, { fieldName: 'hash', unique: true });
+        return new Promise(function (resolve, reject) {
+            blocks.then(function (ds) {
+                ds.find({}, function (err, docs) {
+                    if (err) {
+                        reject(err);
+                    }
+                    resolve(docs);
+                });
+            });
+        });
+    };
+    DbUtil.prototype.addToHeldBlocks = function (hash, height) {
+        this.onHold[hash] = height;
+    };
     DbUtil.prototype.deleteBlockFromHold = function (name, hash) {
         var _this = this;
         var blocks = this.getCollection({
@@ -112,13 +132,43 @@ var DbUtil = /** @class */ (function () {
                     if (err) {
                         reject(err);
                     }
+                    delete _this.onHold[hash];
                     _this.util.log('db', 'info', hash + ' removed hold');
                     resolve(doc);
                 });
             });
         });
     };
+    DbUtil.prototype.saveTransaction = function (txid, name, height, blockHash) {
+        var tx = {
+            txid: txid,
+            height: height,
+            blockHash: blockHash
+        };
+        var txes = this.getCollection({
+            name: name + '-txes',
+            persistent: true
+        }, { fieldName: 'txid', unique: true });
+        return new Promise(function (resolve, reject) {
+            txes.then(function (ds) {
+                ds.insert(tx, function (err, doc) {
+                    if (err) {
+                        reject(err);
+                    }
+                    resolve(doc);
+                });
+            });
+        });
+    };
+    DbUtil.prototype.indexTransactions = function (name, block) {
+        var txHashes = [];
+        block.transactions.forEach(function (tx) {
+            txHashes.push(tx.txid);
+        });
+        return this.util.promiseLoop(this.saveTransaction, this, txHashes, [name, block.height, block.hash]);
+    };
     DbUtil.prototype.saveBlock = function (name, block, confirmed) {
+        var _this = this;
         if (confirmed === void 0) { confirmed = true; }
         var blocks = this.getCollection({
             name: name + '-blocks',
@@ -127,13 +177,18 @@ var DbUtil = /** @class */ (function () {
         if (confirmed) {
             this.deleteBlockFromHold(name, block.hash);
         }
+        else {
+        }
         return new Promise(function (resolve, reject) {
             blocks.then(function (ds) {
                 ds.insert(block, function (err, doc) {
                     if (err) {
                         reject(err);
                     }
-                    resolve(doc);
+                    _this.indexTransactions(name, block)
+                        .then(function () {
+                        resolve(doc);
+                    });
                 });
             });
         });

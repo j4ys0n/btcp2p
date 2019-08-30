@@ -114,8 +114,8 @@ describe('Integration Tests', () => {
     });
     btcp2p.client.on('block', (e: any) => {
       // console.log(e)
-      btcp2p.client.socket.end();
-      done();
+      // btcp2p.client.socket.end();
+      // done();
     })
 
     btcp2p.client.on('connect', (e: any) => {

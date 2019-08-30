@@ -24,6 +24,9 @@ export interface StartOptions {
   fetchMempool?: boolean;
   skipTransactions?: boolean;
   network: NetworkOptions;
+  api?: boolean;
+  apiPort?: number;
+  logLevel?: number;
 }
 
 export interface Shared {

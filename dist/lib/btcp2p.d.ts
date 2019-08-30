@@ -9,6 +9,7 @@ export declare class BTCP2P {
     private serverStarting;
     private serverStarted;
     private serverPort;
+    private api;
     private supportedProtocols;
     private message;
     private clientEvents;
@@ -28,6 +29,7 @@ export declare class BTCP2P {
     private validConnectionConfig;
     private skipBlockDownload;
     private saveMempool;
+    private defaultApiPort;
     /**
      * @param options: StartOptions = {
      *  name: string,

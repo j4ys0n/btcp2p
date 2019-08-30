@@ -8,8 +8,9 @@ var LOG_LEVELS = {
     'error': 3
 };
 var Utils = /** @class */ (function () {
-    function Utils() {
-        this.logLevel = 1;
+    function Utils(logLevel) {
+        if (logLevel === void 0) { logLevel = 2; }
+        this.logLevel = logLevel;
     }
     Utils.prototype.log = function (component, level, message) {
         if (LOG_LEVELS[level] >= this.logLevel) {
@@ -105,6 +106,26 @@ var Utils = /** @class */ (function () {
             reversed = bytes.substr(i * 2, 2) + reversed;
         }
         return reversed;
+    };
+    Utils.prototype.promiseLoop = function (promise, scope, promiseArgsArray, promiseArgs, indexesAsArgs) {
+        if (promiseArgs === void 0) { promiseArgs = []; }
+        if (indexesAsArgs === void 0) { indexesAsArgs = false; }
+        var index = 0;
+        var loop = function () {
+            if (indexesAsArgs) {
+                promiseArgs = [index, promiseArgsArray.length];
+            }
+            var argsArray = [promiseArgsArray[index]].concat(promiseArgs);
+            return promise.apply(scope, argsArray)
+                .then(function () {
+                index++;
+                if (index < promiseArgsArray.length) {
+                    return loop();
+                }
+                return Promise.resolve();
+            });
+        };
+        return loop();
     };
     return Utils;
 }());

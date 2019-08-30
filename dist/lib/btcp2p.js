@@ -6,6 +6,7 @@ var events_1 = require("./events/events");
 var general_util_1 = require("./util/general.util");
 var db_util_1 = require("./util/db.util");
 var message_1 = require("./message/message");
+var api_1 = require("./api/api");
 // testing flag
 var ENV = process.env.NODE_ENV;
 var ENVS = {
@@ -63,7 +64,6 @@ var BTCP2P = /** @class */ (function () {
                 synced: false
             }
         };
-        this.util = new general_util_1.Utils();
         this.dbUtil = new db_util_1.DbUtil();
         this.pingInterval = 5 * MINUTE;
         // if the remote peer acknowledges the version (verack), it can be considered connected
@@ -75,6 +75,8 @@ var BTCP2P = /** @class */ (function () {
         this.validConnectionConfig = true;
         this.skipBlockDownload = false;
         this.saveMempool = false;
+        this.defaultApiPort = 8080;
+        this.util = new general_util_1.Utils(this.options.logLevel || 2);
         if (!!this.options.serverPort) {
             this.serverPort = this.options.serverPort;
         }
@@ -123,6 +125,12 @@ var BTCP2P = /** @class */ (function () {
         else {
             // if no server to start, just init connection
             this.initConnection();
+        }
+        if (this.options.api) {
+            if (this.options.apiPort === undefined) {
+                this.options.apiPort = this.defaultApiPort;
+                this.api = new api_1.API(this.options.apiPort);
+            }
         }
     }
     BTCP2P.prototype.startServer = function () {

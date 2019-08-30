@@ -7,6 +7,10 @@ import {
   Block, BlockZcash, BestBlock, ReducedBlockHeader
 } from '../interfaces/blocks.interface';
 
+import {
+  BitcoinTransaction, ZcashTransaction
+} from '../interfaces/transactions.interface';
+
 interface GetCollectionOptions {
   name: string;
   persistent: boolean;
@@ -16,9 +20,14 @@ interface DatastoreList {
   [key: string]: Datastore;
 }
 
+interface HeldBlocks {
+  [key: string]: number;
+}
+
 export class DbUtil {
   protected util: Utils = new Utils();
   private  datastores: DatastoreList = {};
+  private onHold: HeldBlocks = {};
 
   constructor() {}
 
@@ -71,6 +80,27 @@ export class DbUtil {
     })
   }
 
+  getHeldBlocks(name): Promise<any> {
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: false
+    }, {fieldName: 'hash', unique: true});
+    return new Promise((resolve: any, reject: any) => {
+      blocks.then((ds: Datastore) => {
+        ds.find({}, (err: any, docs: any) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(docs);
+        });
+      })
+    });
+  }
+
+  addToHeldBlocks(hash: string, height: number): void {
+    this.onHold[hash] = height;
+  }
+
   deleteBlockFromHold(name: string, hash: string): Promise<any> {
     let blocks = this.getCollection({
       name: name + '-blocks',
@@ -82,11 +112,47 @@ export class DbUtil {
           if (err) {
             reject(err)
           }
+          delete this.onHold[hash];
           this.util.log('db', 'info', hash + ' removed hold')
           resolve(doc)
         })
       })
     })
+  }
+
+  saveTransaction(txid: string, name: string, height: number, blockHash: string): Promise<any> {
+    const tx = {
+      txid: txid,
+      height: height,
+      blockHash: blockHash
+    }
+    let txes = this.getCollection({
+      name: name + '-txes',
+      persistent: true
+    }, {fieldName: 'txid', unique: true});
+    return new Promise((resolve: any, reject: any) => {
+      txes.then((ds: Datastore) => {
+        ds.insert(tx, (err: any, doc: any) => {
+          if (err) {
+            reject(err)
+          }
+          resolve(doc);
+        });
+      })
+    });
+  }
+
+  indexTransactions(name: string, block: Block | BlockZcash): Promise<any> {
+    let txHashes: Array<string> = [];
+    block.transactions.forEach(tx => {
+      txHashes.push(tx.txid)
+    });
+    return this.util.promiseLoop(
+      this.saveTransaction,
+      this,
+      txHashes,
+      [name, block.height, block.hash]
+    )
   }
 
   saveBlock(name: string, block: Block | BlockZcash, confirmed: boolean = true): Promise<any> {
@@ -96,6 +162,8 @@ export class DbUtil {
     }, {fieldName: 'hash', unique: true});
     if (confirmed) {
       this.deleteBlockFromHold(name, block.hash);
+    } else {
+
     }
     return new Promise((resolve: any, reject: any) => {
       blocks.then((ds: Datastore) => {
@@ -103,7 +171,10 @@ export class DbUtil {
           if (err) {
             reject(err)
           }
-          resolve(doc);
+          this.indexTransactions(name, block)
+          .then(() => {
+            resolve(doc);
+          })
         });
       })
     });
