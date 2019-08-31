@@ -35,10 +35,12 @@
     "@types/node": "^11.11.3",
     "bitcoinjs-lib": "^5.1.2",
     "crypto-binary": "github:j4ys0n/crypto-binary",
+    "express": "^4.17.1",
     "nestdb": "^2.0.0"
   },
   "devDependencies": {
     "@types/chai": "^4.1.7",
+    "@types/express": "^4.17.1",
     "@types/mocha": "^5.2.6",
     "chai": "^4.2.0",
     "eslint-plugin-prettier": "^3.0.1",

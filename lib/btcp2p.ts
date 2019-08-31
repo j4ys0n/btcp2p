@@ -163,7 +163,11 @@ export class BTCP2P {
     if (this.options.api) {
       if (this.options.apiPort === undefined) {
         this.options.apiPort = this.defaultApiPort;
-        this.api = new API(this.options.apiPort);
+      }
+      if (this.options.skipBlockDownload) {
+        this.util.log('api', 'error', 'can\'t start api without data, set skipBlockDownload = false');
+      } else {
+        this.api = new API(this.options.apiPort, this.util, this.dbUtil);
       }
     }
   }
@@ -320,6 +324,9 @@ export class BTCP2P {
         if (!this.skipBlockDownload) {
           blockFetchStarted = true;
           this.startBlockFetch(scope);
+          if (this.options.api) {
+            this.api.start();
+          }
         }
         if (this.saveMempool) {
           scope.message.sendMessage(

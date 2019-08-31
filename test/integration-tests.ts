@@ -26,6 +26,7 @@ const integrationTestOptionsBTC = {
   persist: true,
   fetchMempool: false,
   skipBlockDownload: true,
+  logLevel: 1,
   network: {
     protocol: 'bitcoin',
     magic: 'f9beb4d9',
@@ -45,6 +46,7 @@ const integrationTestOptionsARW = {
   relayTransactions: false,
   persist: false,
   fetchMempool: false,
+  logLevel: 1,
   network: {
     protocol: 'zcash',
     magic: '27a2261c',
@@ -53,7 +55,9 @@ const integrationTestOptionsARW = {
     protocolVersion: 170007,
     pubKeyVersion: 0,
     scriptVersion: 5
-  }
+  },
+  api: true,
+  apiPort: 8080
 };
 
 class BTCP2PTest extends BTCP2P {
