@@ -82,7 +82,7 @@ var DbUtil = /** @class */ (function () {
     DbUtil.prototype.loadCollection = function (filename) {
         var dbPath = path.join(__dirname, '../../data', (filename + '.db'));
         if (this.dbPath !== undefined) {
-            dbPath = this.dbPath;
+            dbPath = path.join(this.dbPath, (filename + '.db'));
         }
         var ds = new Datastore({ filename: dbPath });
         return new Promise(function (resolve, reject) {
