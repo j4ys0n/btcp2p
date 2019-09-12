@@ -76,7 +76,7 @@ var BTCP2P = /** @class */ (function () {
         this.saveMempool = false;
         this.defaultApiPort = 8080;
         this.util = new general_util_1.Utils(this.options.logLevel || 2);
-        this.dbUtil = new db_util_1.DbUtil('nestdb', this.options.network.protocol);
+        this.dbUtil = new db_util_1.DbUtil('nestdb', this.options.network.protocol, this.options.dbPath);
         if (!!this.options.serverPort) {
             this.serverPort = this.options.serverPort;
         }

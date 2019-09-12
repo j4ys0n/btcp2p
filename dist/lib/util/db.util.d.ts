@@ -8,10 +8,11 @@ interface GetCollectionOptions {
 export declare class DbUtil {
     private engine;
     private protocol;
+    private dbPath;
     protected util: Utils;
     private datastores;
     private onHold;
-    constructor(engine: string, protocol: string);
+    constructor(engine: string, protocol: string, dbPath?: string | undefined);
     getCollection(options: GetCollectionOptions, index?: any): Promise<Datastore>;
     loadCollection(filename: string): Promise<Datastore>;
     memoryCollection(): Promise<Datastore>;

@@ -39,10 +39,12 @@ var path = require("path");
 var Datastore = require("nestdb");
 var general_util_1 = require("../util/general.util");
 var DbUtil = /** @class */ (function () {
-    function DbUtil(engine, protocol) {
+    function DbUtil(engine, protocol, dbPath) {
         if (engine === void 0) { engine = 'nest'; }
+        if (dbPath === void 0) { dbPath = undefined; }
         this.engine = engine;
         this.protocol = protocol;
+        this.dbPath = dbPath;
         this.util = new general_util_1.Utils();
         this.datastores = {};
         this.onHold = {};
@@ -78,8 +80,11 @@ var DbUtil = /** @class */ (function () {
         });
     };
     DbUtil.prototype.loadCollection = function (filename) {
-        var filePath = path.join(__dirname, '../../data', (filename + '.db'));
-        var ds = new Datastore({ filename: filePath });
+        var dbPath = path.join(__dirname, '../../data', (filename + '.db'));
+        if (this.dbPath !== undefined) {
+            dbPath = this.dbPath;
+        }
+        var ds = new Datastore({ filename: dbPath });
         return new Promise(function (resolve, reject) {
             ds.load(function (err) {
                 if (err) {

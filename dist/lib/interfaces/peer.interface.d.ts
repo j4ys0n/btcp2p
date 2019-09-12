@@ -25,6 +25,7 @@ export interface StartOptions {
     network: NetworkOptions;
     api?: boolean;
     frontEndPath?: string;
+    dbPath?: string;
     apiPort?: number;
     logLevel?: number;
 }
