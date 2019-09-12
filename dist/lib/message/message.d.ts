@@ -10,8 +10,8 @@ import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
 export declare class Message {
     private options;
     private scope;
+    private dbUtil;
     protected util: Utils;
-    protected dbUtil: DbUtil;
     protected messageConsts: MessageConsts;
     protected handlers: MessageHandlers;
     blockHandler: BlockHandler;
@@ -56,7 +56,7 @@ export declare class Message {
      *  protocolVersion: number,
      * }
      */
-    constructor(options: StartOptions, scope: ProtocolScope);
+    constructor(options: StartOptions, scope: ProtocolScope, dbUtil: DbUtil);
     sendMessage(command: Buffer, payload: Buffer): void;
     sendVersion(): void;
     sendVerack(): void;

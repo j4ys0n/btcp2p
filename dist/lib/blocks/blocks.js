@@ -104,7 +104,11 @@ var Blocks = /** @class */ (function () {
         }
     };
     Blocks.prototype.checkIfFullySynced = function () {
+        console.log('*** checking if synced');
         var currentHeight = this.scope.shared.internalHeight;
+        console.log('currentHeight', currentHeight);
+        console.log('this.scope.shared.externalHeight', this.scope.shared.externalHeight);
+        console.log('this.scope.shared.synced', this.scope.shared.synced);
         if (currentHeight >= this.scope.shared.externalHeight &&
             !this.scope.shared.synced) {
             this.chainFullySynced(currentHeight);

@@ -4,7 +4,6 @@ var crypto = require("crypto");
 var crypto_binary_1 = require("crypto-binary");
 var message_consts_1 = require("./message.consts");
 var general_util_1 = require("../util/general.util");
-var db_util_1 = require("../util/db.util");
 var message_handlers_1 = require("./message.handlers");
 var block_handler_1 = require("../blocks/block-handler");
 var transaction_handler_1 = require("../transactions/transaction-handler");
@@ -37,11 +36,11 @@ var Message = /** @class */ (function () {
      *  protocolVersion: number,
      * }
      */
-    function Message(options, scope) {
+    function Message(options, scope, dbUtil) {
         this.options = options;
         this.scope = scope;
+        this.dbUtil = dbUtil;
         this.util = new general_util_1.Utils();
-        this.dbUtil = new db_util_1.DbUtil();
         this.messageConsts = new message_consts_1.MessageConsts(this.util);
         this.magicInt = 0;
         // version message vars

@@ -39,7 +39,10 @@ var path = require("path");
 var Datastore = require("nestdb");
 var general_util_1 = require("../util/general.util");
 var DbUtil = /** @class */ (function () {
-    function DbUtil() {
+    function DbUtil(engine, protocol) {
+        if (engine === void 0) { engine = 'nest'; }
+        this.engine = engine;
+        this.protocol = protocol;
         this.util = new general_util_1.Utils();
         this.datastores = {};
         this.onHold = {};
@@ -139,7 +142,57 @@ var DbUtil = /** @class */ (function () {
             });
         });
     };
+    DbUtil.prototype.getTransaction = function (txid, name) {
+        var _this = this;
+        var txes = this.getCollection({
+            name: name + '-txes',
+            persistent: true
+        }, { fieldName: 'txid', unique: true });
+        var blocks = this.getCollection({
+            name: name + '-blocks',
+            persistent: true
+        }, { fieldName: 'txid', unique: true });
+        return txes.then(function (txds) {
+            return _this.findTransaction(txid, txds)
+                .then(function (txRef) {
+                if (txRef !== null) {
+                    return blocks.then(function (blkds) {
+                        return _this.findBlock(txRef.blockHash, blkds)
+                            .then(function (block) {
+                            if (block === null) {
+                                _this.util.log('db', 'warn', ['block not found', txRef.blockHash].join(' - '));
+                                return Promise.resolve();
+                            }
+                            var filtered = block.transactions.filter(function (tx) {
+                                if (tx.txid === txRef.txid) {
+                                    return true;
+                                }
+                                return false;
+                            });
+                            if (filtered.length === 1) {
+                                return Promise.resolve(filtered[0]);
+                            }
+                            _this.util.log('db', 'warn', ['tx not found', txRef.txid, 'in block', txRef.blockHash].join(' - '));
+                            return Promise.resolve(null);
+                        });
+                    });
+                }
+                return Promise.resolve();
+            });
+        });
+    };
+    DbUtil.prototype.findTransaction = function (txid, ds) {
+        return new Promise(function (resolve, reject) {
+            ds.findOne({ txid: txid }, function (err, doc) {
+                if (err) {
+                    reject(err);
+                }
+                resolve(doc);
+            });
+        });
+    };
     DbUtil.prototype.saveTransaction = function (txid, name, height, blockHash) {
+        var _this = this;
         var tx = {
             txid: txid,
             height: height,
@@ -151,11 +204,20 @@ var DbUtil = /** @class */ (function () {
         }, { fieldName: 'txid', unique: true });
         return new Promise(function (resolve, reject) {
             txes.then(function (ds) {
-                ds.insert(tx, function (err, doc) {
-                    if (err) {
-                        reject(err);
+                _this.findTransaction(txid, ds)
+                    .then(function (result) {
+                    if (result !== null) {
+                        _this.util.log('db', 'info', ['tx already saved', result.txid].join(' - '));
+                        resolve();
                     }
-                    resolve(doc);
+                    else {
+                        ds.insert(tx, function (err, doc) {
+                            if (err) {
+                                reject(err);
+                            }
+                            resolve(doc);
+                        });
+                    }
                 });
             });
         });
@@ -167,6 +229,66 @@ var DbUtil = /** @class */ (function () {
         });
         return this.util.promiseLoop(this.saveTransaction, this, txHashes, [name, block.height, block.hash]);
     };
+    DbUtil.prototype.getBlock = function (id, name) {
+        var _this = this;
+        var blocks = this.getCollection({
+            name: name + '-blocks',
+            persistent: true
+        });
+        return new Promise(function (resolve, reject) {
+            blocks.then(function (ds) {
+                _this.findBlock(id, ds)
+                    .then(function (block) {
+                    resolve(block);
+                });
+            });
+        });
+    };
+    DbUtil.prototype.findBlock = function (id, ds) {
+        if (typeof id === 'number') {
+            return this.findBlockByHeight(id, ds);
+        }
+        return this.findBlockByHash(id, ds);
+    };
+    DbUtil.prototype.findBlockByHeight = function (height, ds) {
+        return new Promise(function (resolve, reject) {
+            ds.findOne({ height: height }, function (err, doc) {
+                if (err) {
+                    reject(err);
+                }
+                resolve(doc);
+            });
+        });
+    };
+    DbUtil.prototype.findBlockByHash = function (hash, ds) {
+        return new Promise(function (resolve, reject) {
+            ds.findOne({ hash: hash }, function (err, doc) {
+                if (err) {
+                    reject(err);
+                }
+                resolve(doc);
+            });
+        });
+    };
+    DbUtil.prototype.stripShieldedTxData = function (block) {
+        block.transactions.forEach(function (tx) {
+            tx.shieldedInputs.forEach(function (input) {
+                input.anchor = '';
+                input.cv = '';
+                input.nullifier = '';
+                input.rk = '';
+                input.spendAuthSig = '';
+            });
+            tx.shieldedOutputs.forEach(function (output) {
+                output.cmu = '';
+                output.cv = '';
+                output.encCyphertext = '';
+                output.ephemeralKey = '';
+                output.outCyphertext = '';
+            });
+        });
+        return block;
+    };
     DbUtil.prototype.saveBlock = function (name, block, confirmed) {
         var _this = this;
         if (confirmed === void 0) { confirmed = true; }
@@ -175,12 +297,16 @@ var DbUtil = /** @class */ (function () {
             persistent: confirmed
         }, { fieldName: 'hash', unique: true });
         if (confirmed) {
-            this.deleteBlockFromHold(name, block.hash);
+            // this.deleteBlockFromHold(name, block.hash);
         }
         else {
         }
         return new Promise(function (resolve, reject) {
             blocks.then(function (ds) {
+                // strip some data to keep our db size under control
+                if (_this.protocol === 'zcash') {
+                    block = _this.stripShieldedTxData(block);
+                }
                 ds.insert(block, function (err, doc) {
                     if (err) {
                         reject(err);

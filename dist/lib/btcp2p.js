@@ -64,7 +64,6 @@ var BTCP2P = /** @class */ (function () {
                 synced: false
             }
         };
-        this.dbUtil = new db_util_1.DbUtil();
         this.pingInterval = 5 * MINUTE;
         // if the remote peer acknowledges the version (verack), it can be considered connected
         this.serverScopeInit = false;
@@ -77,6 +76,7 @@ var BTCP2P = /** @class */ (function () {
         this.saveMempool = false;
         this.defaultApiPort = 8080;
         this.util = new general_util_1.Utils(this.options.logLevel || 2);
+        this.dbUtil = new db_util_1.DbUtil('nestdb', this.options.network.protocol);
         if (!!this.options.serverPort) {
             this.serverPort = this.options.serverPort;
         }
@@ -129,7 +129,12 @@ var BTCP2P = /** @class */ (function () {
         if (this.options.api) {
             if (this.options.apiPort === undefined) {
                 this.options.apiPort = this.defaultApiPort;
-                this.api = new api_1.API(this.options.apiPort);
+            }
+            if (this.options.skipBlockDownload) {
+                this.util.log('api', 'error', 'can\'t start api without data, set skipBlockDownload = false');
+            }
+            else {
+                this.api = new api_1.API(this.options.apiPort, this.options, this.util, this.dbUtil);
             }
         }
     }
@@ -176,7 +181,7 @@ var BTCP2P = /** @class */ (function () {
             this.serverScopeInit = true;
             this.util.log('core', 'debug', 'initializing server message & event handling');
             this.server.socket = socket;
-            this.server.message = new message_1.Message(this.options, this.server);
+            this.server.message = new message_1.Message(this.options, this.server, this.dbUtil);
             this.server.message.setupMessageParser();
             this.initEventHandlers(this.server);
         }
@@ -189,7 +194,7 @@ var BTCP2P = /** @class */ (function () {
             this.clientScopeInit = true;
             this.util.log('core', 'debug', 'initializing client message & event handling');
             this.client.socket = socket;
-            this.client.message = new message_1.Message(this.options, this.client);
+            this.client.message = new message_1.Message(this.options, this.client, this.dbUtil);
             this.client.message.setupMessageParser();
             this.initEventHandlers(this.client);
         }
@@ -290,6 +295,9 @@ var BTCP2P = /** @class */ (function () {
                 if (!_this.skipBlockDownload) {
                     blockFetchStarted = true;
                     _this.startBlockFetch(scope);
+                    if (_this.options.api) {
+                        _this.api.start();
+                    }
                 }
                 if (_this.saveMempool) {
                     scope.message.sendMessage(scope.message.commands.mempool, Buffer.from([]));
