@@ -31,7 +31,7 @@ export class HttpServer {
 
     if (this.frontEndPath !== undefined) {
       console.log('frontend', __dirname + '/../../' + this.frontEndPath)
-      this.server.use('/', express.static(__dirname + '/../../' + this.frontEndPath));
+      this.server.use('/', express.static(this.frontEndPath));
     }
   }
 

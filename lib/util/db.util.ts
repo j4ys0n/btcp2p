@@ -29,7 +29,11 @@ export class DbUtil {
   private  datastores: DatastoreList = {};
   private onHold: HeldBlocks = {};
 
-  constructor(private engine: string = 'nest', private protocol: string) {}
+  constructor(
+    private engine: string = 'nest',
+    private protocol: string,
+    private dbPath: string | undefined = undefined
+  ) {}
 
   async getCollection(options: GetCollectionOptions, index: any = undefined): Promise<Datastore> {
     const ds = this.datastores[options.name];
@@ -53,8 +57,11 @@ export class DbUtil {
   }
 
   loadCollection(filename: string): Promise<Datastore> {
-    const filePath = path.join(__dirname, '../../data', (filename + '.db'));
-    const ds = new Datastore({filename: filePath});
+    let dbPath: string = path.join(__dirname, '../../data', (filename + '.db'));
+    if (this.dbPath !== undefined) {
+      dbPath = path.join(this.dbPath, (filename + '.db'));
+    }
+    const ds = new Datastore({filename: dbPath});
     return new Promise((resolve, reject) => {
       ds.load((err: any) => {
         if (err) {

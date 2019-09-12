@@ -102,7 +102,11 @@ export class BTCP2P {
     this.util = new Utils(
       this.options.logLevel || 2
     )
-    this.dbUtil = new DbUtil('nestdb', this.options.network.protocol);
+    this.dbUtil = new DbUtil(
+      'nestdb',
+      this.options.network.protocol,
+      this.options.dbPath
+    );
     if (!!this.options.serverPort) {
       this.serverPort = this.options.serverPort;
     } else {
