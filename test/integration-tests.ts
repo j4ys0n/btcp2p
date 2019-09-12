@@ -57,6 +57,7 @@ const integrationTestOptionsARW = {
     scriptVersion: 5
   },
   api: true,
+  frontEndPath: 'front-end',
   apiPort: 8080
 };
 
@@ -75,10 +76,10 @@ describe('Integration Tests', () => {
     btcp2p = new BTCP2PTest(integrationTestOptionsARW);
     let nextHash = '';
     btcp2p.client.on('peer_message', (e: PeerMessageEvent) => {
-      console.log('peer_message', e);
+      // console.log('peer_message', e);
     });
     btcp2p.client.on('sent_message', (e: PeerMessageEvent) => {
-      console.log('sent_message', e);
+      // console.log('sent_message', e);
     });
     btcp2p.client.on('error', (e: any) => {
       console.log(e)

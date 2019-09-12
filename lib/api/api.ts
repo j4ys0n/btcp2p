@@ -5,22 +5,30 @@ import { Utils } from '../util/general.util';
 import { DbUtil } from '../util/db.util';
 
 import { Route } from '../interfaces/api.interface';
+import { StartOptions } from '../interfaces/peer.interface';
+import {
+  Block, BlockZcash
+} from '../interfaces/blocks.interface';
+import {
+  BitcoinTransaction, ZcashTransaction
+} from '../interfaces/transactions.interface';
 
 export class API {
-  private apiServer: HttpServer
+  private httpServer: HttpServer
   private apiRoutes: HttpRoutes;
 
   constructor(
     private port: number,
+    private options: StartOptions,
     private util: Utils,
-    private dbUtil: DbUtil
+    private dbUtil: DbUtil,
   ) {
     this.apiRoutes = new HttpRoutes();
-    this.apiServer = new HttpServer(this.apiRoutes);
+    this.httpServer = new HttpServer(this.apiRoutes, this.options.frontEndPath);
   }
 
   public start(): Promise<any> {
-    return this.apiServer.start(this.port, this.routes())
+    return this.httpServer.start(this.port, this.routes())
     .then((): Promise<any> => {
       this.util.log('api', 'info', 'api server listening on port ' + this.port);
       return Promise.resolve();
@@ -29,25 +37,36 @@ export class API {
 
   private routes(): Array<Route> {
     return [
-      {path: '/blocks', method: 'get', controller: this.blocksController},
-      {path: '/block/:id', method: 'get', controller: this.blockController},
-      {path: '/tx/:id', method: 'get', controller: this.txController}
+      {path: '/api/blocks', method: 'get', controller: this.blocksController.bind(this)},
+      {path: '/api/block/:id', method: 'get', controller: this.blockController.bind(this)},
+      {path: '/api/tx/:id', method: 'get', controller: this.txController.bind(this)}
     ]
   }
 
   private blocksController(req: Request, res: Response): any {
-
+    // this.dbUtil.
   }
 
   private blockController(req: Request, res: Response): any {
-    const blockId = decodeURIComponent(req.params.id);
+    let blockId: string | number = decodeURIComponent(req.params.id);
+    if (blockId === parseInt(blockId, 10).toString()) {
+      blockId = parseInt(blockId, 10);
+    }
     console.log(blockId)
-    res.send(blockId)
+    this.dbUtil.getBlock(blockId, this.options.name)
+    .then((block: Block | BlockZcash) => {
+      res.send(block)
+    })
+    // res.send(blockId)
   }
 
   private txController(req: Request, res: Response): any {
     const hash = decodeURIComponent(req.params.id);
-    console.log(hash)
-    res.send(hash)
+    this.dbUtil.getTransaction(hash, this.options.name)
+    .then((tx: BitcoinTransaction | ZcashTransaction) => {
+      res.send(tx)
+    })
+    // console.log(hash)
+    // res.send(hash)
   }
 }

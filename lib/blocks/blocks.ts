@@ -120,7 +120,11 @@ export class Blocks {
   }
 
   checkIfFullySynced() {
+    console.log('*** checking if synced')
     const currentHeight = this.scope.shared.internalHeight;
+    console.log('currentHeight', currentHeight)
+    console.log('this.scope.shared.externalHeight', this.scope.shared.externalHeight)
+    console.log('this.scope.shared.synced', this.scope.shared.synced)
     if (
       currentHeight >= this.scope.shared.externalHeight &&
       !this.scope.shared.synced

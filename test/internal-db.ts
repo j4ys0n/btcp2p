@@ -8,7 +8,7 @@ import { DbUtil } from '../lib/util/db.util';
 
 describe('NestDB tests', () => {
 
-  const dbUtil = new DbUtil();
+  const dbUtil = new DbUtil('nestdb', 'bitcoin');
 
   it('should return a new in-memory Datastore', (done) => {
     dbUtil.getCollection({name: 'test', persistent: false})

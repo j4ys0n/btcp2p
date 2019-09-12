@@ -36,7 +36,6 @@ const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
 
 export class Message {
   protected util: Utils = new Utils();
-  protected dbUtil: DbUtil = new DbUtil();
   protected messageConsts: MessageConsts = new MessageConsts(this.util);
   protected handlers: MessageHandlers;
   public blockHandler: BlockHandler;
@@ -64,7 +63,11 @@ export class Message {
    * }
    */
 
-  constructor(private options: StartOptions, private scope: ProtocolScope) {
+  constructor(
+    private options: StartOptions,
+    private scope: ProtocolScope,
+    private dbUtil: DbUtil
+  ) {
     this.magic = Buffer.from(this.options.network.magic, 'hex');
     try {
       this.magicInt = this.magic.readUInt32LE(0);

@@ -4,10 +4,11 @@ import { HttpRoutes } from './http.routes';
 
 export class HttpServer {
   public server: express.Application;
-  // public routes: Routes = new Routes();
 
-  constructor(private routes: HttpRoutes) {
-
+  constructor(
+    private routes: HttpRoutes,
+    private frontEndPath: string | undefined
+  ) {
     this.server = express();
     this.config();
     this.routes = new HttpRoutes();
@@ -28,7 +29,10 @@ export class HttpServer {
       next();
     });
 
-    // this.app.use('/static', express.static(__dirname + '/static'));
+    if (this.frontEndPath !== undefined) {
+      console.log('frontend', __dirname + '/../../' + this.frontEndPath)
+      this.server.use('/', express.static(__dirname + '/../../' + this.frontEndPath));
+    }
   }
 
   public start(port: number, routes: Array<any>): Promise<any> {
@@ -40,5 +44,3 @@ export class HttpServer {
     });
   }
 }
-
-// export default new App().app;

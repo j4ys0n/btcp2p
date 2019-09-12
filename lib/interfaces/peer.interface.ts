@@ -25,6 +25,7 @@ export interface StartOptions {
   skipTransactions?: boolean;
   network: NetworkOptions;
   api?: boolean;
+  frontEndPath?: string;
   apiPort?: number;
   logLevel?: number;
 }

@@ -29,10 +29,11 @@ export class DbUtil {
   private  datastores: DatastoreList = {};
   private onHold: HeldBlocks = {};
 
-  constructor() {}
+  constructor(private engine: string = 'nest', private protocol: string) {}
 
   async getCollection(options: GetCollectionOptions, index: any = undefined): Promise<Datastore> {
     const ds = this.datastores[options.name];
+    // let ds = undefined
     if (ds !== undefined) {
       return Promise.resolve(ds);
     } else {
@@ -120,6 +121,60 @@ export class DbUtil {
     })
   }
 
+  getTransaction(txid: string, name: string): Promise<any> {
+    let txes = this.getCollection({
+      name: name + '-txes',
+      persistent: true
+    }, {fieldName: 'txid', unique: true});
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: true
+    }, {fieldName: 'txid', unique: true});
+    return txes.then((txds: Datastore): Promise<any> => {
+      return this.findTransaction(txid, txds)
+      .then((txRef: any): Promise<any> => {
+        if (txRef !== null) {
+          return blocks.then((blkds): Promise<any> => {
+            return this.findBlock(txRef.blockHash, blkds)
+            .then((block: Block | BlockZcash): Promise<any> => {
+              if (block === null) {
+                this.util.log('db', 'warn', ['block not found', txRef.blockHash].join(' - '))
+                return Promise.resolve()
+              }
+              const filtered = block.transactions.filter(
+                (tx: BitcoinTransaction | ZcashTransaction): boolean => {
+                  if (tx.txid === txRef.txid) {
+                    return true;
+                  }
+                  return false;
+                }
+              )
+              if (filtered.length === 1) {
+                return Promise.resolve(filtered[0])
+              }
+              this.util.log('db', 'warn',
+                ['tx not found', txRef.txid, 'in block', txRef.blockHash].join(' - '))
+              return Promise.resolve(null)
+            })
+          })
+        }
+        return Promise.resolve();
+      });
+
+    })
+  }
+
+  findTransaction(txid: string, ds: Datastore): Promise<any> {
+    return new Promise((resolve: any, reject: any) => {
+      ds.findOne({txid: txid}, (err: any, doc: any) => {
+        if (err) {
+          reject(err)
+        }
+        resolve(doc)
+      })
+    })
+  }
+
   saveTransaction(txid: string, name: string, height: number, blockHash: string): Promise<any> {
     const tx = {
       txid: txid,
@@ -132,12 +187,20 @@ export class DbUtil {
     }, {fieldName: 'txid', unique: true});
     return new Promise((resolve: any, reject: any) => {
       txes.then((ds: Datastore) => {
-        ds.insert(tx, (err: any, doc: any) => {
-          if (err) {
-            reject(err)
+        this.findTransaction(txid, ds)
+        .then((result: any) => {
+          if (result !== null) {
+            this.util.log('db', 'info', ['tx already saved', result.txid].join(' - '))
+            resolve();
+          } else {
+            ds.insert(tx, (err: any, doc: any) => {
+              if (err) {
+                reject(err)
+              }
+              resolve(doc);
+            });
           }
-          resolve(doc);
-        });
+        })
       })
     });
   }
@@ -155,18 +218,86 @@ export class DbUtil {
     )
   }
 
+  getBlock(id: string | number, name: string): Promise<any> {
+    let blocks = this.getCollection({
+      name: name + '-blocks',
+      persistent: true
+    });
+    return new Promise((resolve: any, reject: any) => {
+      blocks.then((ds: Datastore) => {
+        this.findBlock(id, ds)
+        .then((block: Block | BlockZcash) => {
+          resolve(block)
+        })
+      })
+    })
+  }
+
+  findBlock(id: string | number, ds: Datastore): Promise<any> {
+    if (typeof id === 'number') {
+      return this.findBlockByHeight(id, ds);
+    }
+    return this.findBlockByHash(id, ds);
+  }
+
+  findBlockByHeight(height: number, ds: Datastore): Promise<any> {
+    return new Promise((resolve: any, reject: any) => {
+      ds.findOne({height: height}, (err: any, doc: any) => {
+        if (err) {
+          reject(err)
+        }
+        resolve(doc)
+      })
+    })
+  }
+
+  findBlockByHash(hash: string, ds: Datastore): Promise<any> {
+    return new Promise((resolve: any, reject: any) => {
+      ds.findOne({hash: hash}, (err: any, doc: any) => {
+        if (err) {
+          reject(err)
+        }
+        resolve(doc)
+      })
+    })
+  }
+
+  stripShieldedTxData(block: BlockZcash): BlockZcash {
+    block.transactions.forEach((tx: ZcashTransaction) => {
+      tx.shieldedInputs.forEach((input) => {
+        input.anchor = '';
+        input.cv = '';
+        input.nullifier = '';
+        input.rk = '';
+        input.spendAuthSig = '';
+      });
+      tx.shieldedOutputs.forEach((output) => {
+        output.cmu = '';
+        output.cv = '';
+        output.encCyphertext = '';
+        output.ephemeralKey = '';
+        output.outCyphertext = '';
+      })
+    })
+    return block;
+  }
+
   saveBlock(name: string, block: Block | BlockZcash, confirmed: boolean = true): Promise<any> {
     let blocks = this.getCollection({
       name: name + '-blocks',
       persistent: confirmed
     }, {fieldName: 'hash', unique: true});
     if (confirmed) {
-      this.deleteBlockFromHold(name, block.hash);
+      // this.deleteBlockFromHold(name, block.hash);
     } else {
 
     }
     return new Promise((resolve: any, reject: any) => {
       blocks.then((ds: Datastore) => {
+        // strip some data to keep our db size under control
+        if (this.protocol === 'zcash') {
+          block = this.stripShieldedTxData(<BlockZcash>block);
+        }
         ds.insert(block, (err: any, doc: any) => {
           if (err) {
             reject(err)

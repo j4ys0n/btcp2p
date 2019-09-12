@@ -62,7 +62,7 @@ export class BTCP2P {
   }
 
   protected util: Utils;
-  protected dbUtil: DbUtil = new DbUtil();
+  protected dbUtil: DbUtil;
 
   private pings: any;
   private pingInterval = 5 * MINUTE;
@@ -102,6 +102,7 @@ export class BTCP2P {
     this.util = new Utils(
       this.options.logLevel || 2
     )
+    this.dbUtil = new DbUtil('nestdb', this.options.network.protocol);
     if (!!this.options.serverPort) {
       this.serverPort = this.options.serverPort;
     } else {
@@ -167,7 +168,7 @@ export class BTCP2P {
       if (this.options.skipBlockDownload) {
         this.util.log('api', 'error', 'can\'t start api without data, set skipBlockDownload = false');
       } else {
-        this.api = new API(this.options.apiPort, this.util, this.dbUtil);
+        this.api = new API(this.options.apiPort, this.options, this.util, this.dbUtil);
       }
     }
   }
@@ -214,7 +215,7 @@ export class BTCP2P {
       this.serverScopeInit = true;
       this.util.log('core', 'debug', 'initializing server message & event handling');
       this.server.socket = socket;
-      this.server.message = new Message(this.options, this.server);
+      this.server.message = new Message(this.options, this.server, this.dbUtil);
       this.server.message.setupMessageParser();
       this.initEventHandlers(this.server);
     } else {
@@ -227,7 +228,7 @@ export class BTCP2P {
       this.clientScopeInit = true;
       this.util.log('core', 'debug', 'initializing client message & event handling');
       this.client.socket = socket;
-      this.client.message = new Message(this.options, this.client);
+      this.client.message = new Message(this.options, this.client, this.dbUtil);
       this.client.message.setupMessageParser();
       this.initEventHandlers(this.client);
     } else {
