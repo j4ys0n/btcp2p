@@ -274,8 +274,10 @@ export class BTCP2P {
 
   private initRestartClient(wait: number): Promise<boolean> {
     this.client.connected = false;
-    this.clientSocket.end();
-    this.clientSocket.destroy();
+    if (this.clientSocket !== undefined) {
+      this.clientSocket.end();
+      this.clientSocket.destroy();
+    }
     clearInterval(this.pings);
     return new Promise((resolve, reject) => {
       setTimeout(() => {

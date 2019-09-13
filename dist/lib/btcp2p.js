@@ -237,8 +237,10 @@ var BTCP2P = /** @class */ (function () {
     BTCP2P.prototype.initRestartClient = function (wait) {
         var _this = this;
         this.client.connected = false;
-        this.clientSocket.end();
-        this.clientSocket.destroy();
+        if (this.clientSocket !== undefined) {
+            this.clientSocket.end();
+            this.clientSocket.destroy();
+        }
         clearInterval(this.pings);
         return new Promise(function (resolve, reject) {
             setTimeout(function () {
