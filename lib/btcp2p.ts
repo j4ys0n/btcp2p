@@ -18,7 +18,8 @@ const ENVS = {
   test: 'test'
 };
 // general consts
-const MINUTE = 60 * 1000;
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
 
 export class BTCP2P {
   private clientSocket!: net.Socket;
@@ -38,6 +39,7 @@ export class BTCP2P {
     on: this.clientEvents.on.bind(this.clientEvents),
     socket: this.clientSocket,
     message: this.message, // this will be overwritten
+    retryingConnection: false,
     connected: false,
     shared: {
       externalHeight: 0,
@@ -52,6 +54,7 @@ export class BTCP2P {
     on: this.serverEvents.on.bind(this.serverEvents),
     socket: this.serverSocket,
     message: this.message, // this will be overwritten
+    retryingConnection: false,
     connected: false,
     shared: {
       externalHeight: 0,
@@ -70,8 +73,7 @@ export class BTCP2P {
   private serverScopeInit = false;
   private clientScopeInit = false;
 
-  protected rejectedRetryPause = MINUTE; // on disctonnect/reject
-  protected errorRetryPause = 3 * MINUTE; // on node crash/restart
+  protected connectRetryPause = MINUTE; // on node crash/restart
 
   private headers!: Buffer;
   private waitingForHeaders = false;
@@ -117,17 +119,6 @@ export class BTCP2P {
     }
     this.util.log('core', 'info', 'server port: ' + this.serverPort);
 
-    this.clientEvents.on('connection_rejected', event => {
-      this.util.log('core', 'critical', 'connection rejected');
-      this.clientEvents.fire('error', {message: 'connection rejected, maybe banned, or old protocol version'});
-      this.restartClient(this.rejectedRetryPause);
-    });
-
-    this.clientEvents.on('disconnect', event => {
-      this.util.log('core', 'warn', 'client disconnected');
-      this.restartClient(this.rejectedRetryPause);
-    });
-
     if (this.options.skipTransactions == undefined) {
       this.options.skipTransactions = false;
     }
@@ -145,6 +136,28 @@ export class BTCP2P {
     ) {
       this.saveMempool = true;
     }
+
+    if (
+      this.options.persist &&
+      this.options.retryPause !== undefined &&
+      this.options.retryPause > 0
+    ) {
+      this.connectRetryPause = this.options.retryPause * SECOND;
+      this.util.log('core', 'info', 'retry pause set to ' + this.connectRetryPause.toString());
+    }
+
+    this.clientEvents.on('disconnect', event => {
+      this.client.connected = false;
+      this.util.log('core', 'warn', 'client disconnected');
+      this.restartClient(this.connectRetryPause);
+    });
+
+    this.clientEvents.on('connection_rejected', event => {
+      this.client.connected = false;
+      this.util.log('core', 'critical', 'connection rejected');
+      this.clientEvents.fire('error', {message: 'connection rejected, maybe banned, or old protocol version'});
+      this.restartClient(this.connectRetryPause);
+    });
 
     // start server if necessary and init connection
     if (this.options.startServer) {
@@ -265,20 +278,31 @@ export class BTCP2P {
   }
 
   public restartClient(wait: number): Promise<boolean> {
-    if (this.options.persist && !this.client.connected) {
+    this.util.log('core', 'info',
+      'reconnecting. persist: ' + this.options.persist +
+      ' retryingConnection: ' + this.client.retryingConnection +
+      ' connected: ' + this.client.connected);
+    if (
+      this.options.persist &&
+      !this.client.retryingConnection &&
+      !this.client.connected
+    ) {
+      this.client.retryingConnection = true;
       return this.initRestartClient(wait);
     } else {
+      this.util.log('core', 'warn', 'client connection attempt already in progress');
       return Promise.resolve(false);
     }
   }
 
   private initRestartClient(wait: number): Promise<boolean> {
-    this.client.connected = false;
     if (this.clientSocket !== undefined) {
       this.clientSocket.end();
       this.clientSocket.destroy();
     }
+    this.clientScopeInit = false;
     clearInterval(this.pings);
+    this.util.log('core', 'info', 'reconnecting in ' + wait.toString());
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         this.initConnection();
@@ -317,7 +341,7 @@ export class BTCP2P {
         } else {
           this.clientEvents.fire('error', {message: 'socket error'});
         }
-        this.restartClient(this.errorRetryPause);
+        this.restartClient(this.connectRetryPause);
       });
     })
   }
@@ -347,6 +371,7 @@ export class BTCP2P {
     scope.events.on('verack', e => {
       if (!scope.connected) {
         scope.connected = true;
+        scope.retryingConnection = false;
         scope.events.fire('connect', {});
         tryStartActions();
       }
