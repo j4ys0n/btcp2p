@@ -19,6 +19,7 @@ export interface StartOptions {
     serverPort?: number;
     startServer?: boolean;
     persist: boolean;
+    retryPause?: number;
     skipBlockDownload?: boolean;
     fetchMempool?: boolean;
     skipTransactions?: boolean;
@@ -40,6 +41,7 @@ export interface ProtocolScope {
     on: Events['on'];
     socket: net.Socket;
     message: Message;
+    retryingConnection: boolean;
     connected: boolean;
     shared: Shared;
 }
