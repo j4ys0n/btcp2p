@@ -22,8 +22,7 @@ export declare class BTCP2P {
     private pingInterval;
     private serverScopeInit;
     private clientScopeInit;
-    protected rejectedRetryPause: number;
-    protected errorRetryPause: number;
+    protected connectRetryPause: number;
     private headers;
     private waitingForHeaders;
     private validConnectionConfig;

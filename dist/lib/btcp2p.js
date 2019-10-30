@@ -13,7 +13,8 @@ var ENVS = {
     test: 'test'
 };
 // general consts
-var MINUTE = 60 * 1000;
+var SECOND = 1000;
+var MINUTE = 60 * SECOND;
 var BTCP2P = /** @class */ (function () {
     /**
      * @param options: StartOptions = {
@@ -42,6 +43,7 @@ var BTCP2P = /** @class */ (function () {
             on: this.clientEvents.on.bind(this.clientEvents),
             socket: this.clientSocket,
             message: this.message,
+            retryingConnection: false,
             connected: false,
             shared: {
                 externalHeight: 0,
@@ -56,6 +58,7 @@ var BTCP2P = /** @class */ (function () {
             on: this.serverEvents.on.bind(this.serverEvents),
             socket: this.serverSocket,
             message: this.message,
+            retryingConnection: false,
             connected: false,
             shared: {
                 externalHeight: 0,
@@ -68,8 +71,7 @@ var BTCP2P = /** @class */ (function () {
         // if the remote peer acknowledges the version (verack), it can be considered connected
         this.serverScopeInit = false;
         this.clientScopeInit = false;
-        this.rejectedRetryPause = MINUTE; // on disctonnect/reject
-        this.errorRetryPause = 3 * MINUTE; // on node crash/restart
+        this.connectRetryPause = MINUTE; // on node crash/restart
         this.waitingForHeaders = false;
         this.validConnectionConfig = true;
         this.skipBlockDownload = false;
@@ -87,15 +89,6 @@ var BTCP2P = /** @class */ (function () {
             throw new Error('protocol must be one of: ' + this.supportedProtocols.join(', '));
         }
         this.util.log('core', 'info', 'server port: ' + this.serverPort);
-        this.clientEvents.on('connection_rejected', function (event) {
-            _this.util.log('core', 'critical', 'connection rejected');
-            _this.clientEvents.fire('error', { message: 'connection rejected, maybe banned, or old protocol version' });
-            _this.restartClient(_this.rejectedRetryPause);
-        });
-        this.clientEvents.on('disconnect', function (event) {
-            _this.util.log('core', 'warn', 'client disconnected');
-            _this.restartClient(_this.rejectedRetryPause);
-        });
         if (this.options.skipTransactions == undefined) {
             this.options.skipTransactions = false;
         }
@@ -107,6 +100,23 @@ var BTCP2P = /** @class */ (function () {
             this.options.fetchMempool !== false) {
             this.saveMempool = true;
         }
+        if (this.options.persist &&
+            this.options.retryPause !== undefined &&
+            this.options.retryPause > 0) {
+            this.connectRetryPause = this.options.retryPause * SECOND;
+            this.util.log('core', 'info', 'retry pause set to ' + this.connectRetryPause.toString());
+        }
+        this.clientEvents.on('disconnect', function (event) {
+            _this.client.connected = false;
+            _this.util.log('core', 'warn', 'client disconnected');
+            _this.restartClient(_this.connectRetryPause);
+        });
+        this.clientEvents.on('connection_rejected', function (event) {
+            _this.client.connected = false;
+            _this.util.log('core', 'critical', 'connection rejected');
+            _this.clientEvents.fire('error', { message: 'connection rejected, maybe banned, or old protocol version' });
+            _this.restartClient(_this.connectRetryPause);
+        });
         // start server if necessary and init connection
         if (this.options.startServer) {
             this.serverInstance = net.createServer(function (socket) {
@@ -227,21 +237,29 @@ var BTCP2P = /** @class */ (function () {
         });
     };
     BTCP2P.prototype.restartClient = function (wait) {
-        if (this.options.persist && !this.client.connected) {
+        this.util.log('core', 'info', 'reconnecting. persist: ' + this.options.persist +
+            ' retryingConnection: ' + this.client.retryingConnection +
+            ' connected: ' + this.client.connected);
+        if (this.options.persist &&
+            !this.client.retryingConnection &&
+            !this.client.connected) {
+            this.client.retryingConnection = true;
             return this.initRestartClient(wait);
         }
         else {
+            this.util.log('core', 'warn', 'client connection attempt already in progress');
             return Promise.resolve(false);
         }
     };
     BTCP2P.prototype.initRestartClient = function (wait) {
         var _this = this;
-        this.client.connected = false;
         if (this.clientSocket !== undefined) {
             this.clientSocket.end();
             this.clientSocket.destroy();
         }
+        this.clientScopeInit = false;
         clearInterval(this.pings);
+        this.util.log('core', 'info', 'reconnecting in ' + wait.toString());
         return new Promise(function (resolve, reject) {
             setTimeout(function () {
                 _this.initConnection();
@@ -284,7 +302,7 @@ var BTCP2P = /** @class */ (function () {
                 else {
                     _this.clientEvents.fire('error', { message: 'socket error' });
                 }
-                _this.restartClient(_this.errorRetryPause);
+                _this.restartClient(_this.connectRetryPause);
             });
         });
     };
@@ -309,6 +327,7 @@ var BTCP2P = /** @class */ (function () {
         scope.events.on('verack', function (e) {
             if (!scope.connected) {
                 scope.connected = true;
+                scope.retryingConnection = false;
                 scope.events.fire('connect', {});
                 tryStartActions();
             }
