@@ -1,3 +1,5 @@
+the most recent work is on the [beta branch](https://github.com/j4ys0n/btcp2p/tree/beta)
+
 # BTCP2P
 
 A light client that can connect to and interact with any crypto p2p network based on the bitcoin protocol.
