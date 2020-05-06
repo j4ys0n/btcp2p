@@ -12,11 +12,17 @@ export interface SentMessageEvent {
 export interface PeerMessageEvent {
     command: string;
     payload?: any;
+    data?: Buffer;
 }
 export interface BlockNotifyEvent {
     hash: string;
 }
-export interface TxNotifyEvent {
+export interface TxInvEvent {
+    version: number;
+    hash: string;
+    raw: Buffer;
+}
+export interface TxEvent {
     hash: string;
 }
 export interface ErrorEvent {

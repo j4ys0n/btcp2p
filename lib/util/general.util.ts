@@ -1,6 +1,21 @@
 import * as crypto from 'crypto';
 
+const LOG_LEVELS = {
+  'debug': 0,
+  'info': 1,
+  'warn': 2,
+  'error': 3
+}
+
 export class Utils {
+  constructor(public logLevel: number = 2) {
+
+  }
+  public log(component: string, level: string, message: any) {
+    if (LOG_LEVELS[level] >= this.logLevel) {
+      console.log('['+ component +'] ['+ level +']\t' + message);
+    }
+  }
   public sha256(buffer: Buffer): Buffer {
     const hash1 = crypto.createHash('sha256');
     hash1.update(buffer);
@@ -96,5 +111,24 @@ export class Utils {
       reversed = bytes.substr(i*2, 2) + reversed;
     }
     return reversed;
+  }
+
+  public promiseLoop(promise: Function, scope: any, promiseArgsArray: Array<any>, promiseArgs: Array<any> = [], indexesAsArgs: boolean = false): Promise<any> {
+    let index = 0;
+    const loop = (): Promise<any> => {
+      if (indexesAsArgs) {
+        promiseArgs = [index, promiseArgsArray.length]
+      }
+      const argsArray: Array<any> = [...[promiseArgsArray[index]], ...promiseArgs]
+      return promise.apply(scope, argsArray)
+      .then(() => {
+        index++;
+        if (index < promiseArgsArray.length) {
+          return loop();
+        }
+        return Promise.resolve();
+      });
+    };
+    return loop();
   }
 }

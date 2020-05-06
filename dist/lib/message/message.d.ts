@@ -1,17 +1,22 @@
 /// <reference types="node" />
-import * as net from 'net';
-import { Events } from '../events/events';
+import { MessageConsts } from './message.consts';
 import { Utils } from '../util/general.util';
+import { DbUtil } from '../util/db.util';
 import { MessageHandlers } from './message.handlers';
-export interface MessageOptions {
-    magic: string;
-    protocolVersion: number;
-    relayTransactions: boolean;
-}
+import { BlockHandler } from '../blocks/block-handler';
+import { TransactionHandler } from '../transactions/transaction-handler';
+import { PeerHandler } from '../peers/peers';
+import { StartOptions, ProtocolScope } from '../interfaces/peer.interface';
 export declare class Message {
-    private messageOptions;
+    private options;
+    private scope;
+    private dbUtil;
     protected util: Utils;
+    protected messageConsts: MessageConsts;
     protected handlers: MessageHandlers;
+    blockHandler: BlockHandler;
+    protected transactionHandler: TransactionHandler;
+    protected peerHandler: PeerHandler;
     private magic;
     private magicInt;
     private networkServices;
@@ -21,10 +26,9 @@ export declare class Message {
     private relayTransactions;
     commands: {
         addr: Buffer;
-        alert: Buffer;
         block: Buffer;
         blocktxn: Buffer;
-        checkorder: Buffer;
+        cmpctblock: Buffer;
         feefilter: Buffer;
         getaddr: Buffer;
         getblocks: Buffer;
@@ -34,14 +38,13 @@ export declare class Message {
         headers: Buffer;
         inv: Buffer;
         mempool: Buffer;
+        merkleblock: Buffer;
         notfound: Buffer;
         ping: Buffer;
         pong: Buffer;
         reject: Buffer;
-        reply: Buffer;
         sendcmpct: Buffer;
         sendheaders: Buffer;
-        submitorder: Buffer;
         tx: Buffer;
         verack: Buffer;
         version: Buffer;
@@ -53,17 +56,19 @@ export declare class Message {
      *  protocolVersion: number,
      * }
      */
-    constructor(messageOptions: MessageOptions);
-    sendMessage(command: Buffer, payload: Buffer, socket: net.Socket): void;
-    sendVersion(events: Events, socket: net.Socket): void;
-    sendPing(events: Events, socket: net.Socket): void;
-    sendHeaders(payload: Buffer, events: Events, socket: net.Socket): void;
-    sendGetHeaders(payload: Buffer, events: Events, socket: net.Socket): void;
-    sendGetAddr(events: Events, socket: net.Socket): void;
-    sendGetBlocks(events: Events, socket: net.Socket, hash: string): void;
-    sendAddr(events: Events, socket: net.Socket, ip: string, port: number): void;
-    sendReject(msg: string, ccode: number, reason: string, extra: string, socket: net.Socket): void;
-    setupMessageParser(events: Events, socket: net.Socket): void;
+    constructor(options: StartOptions, scope: ProtocolScope, dbUtil: DbUtil);
+    sendMessage(command: Buffer, payload: Buffer): void;
+    sendVersion(): void;
+    sendVerack(): void;
+    sendPing(): void;
+    sendHeaders(payload: Buffer): void;
+    sendGetHeaders(payload: Buffer): void;
+    sendGetAddr(): void;
+    sendGetBlocks(hash: string): void;
+    sendGetData(payload: Buffer): void;
+    sendAddr(ip: string, port: number): void;
+    sendReject(msg: string, ccode: number, reason: string, extra: string): void;
+    setupMessageParser(): void;
     private ipTo16ByteBuffer;
     private handleMessage;
 }

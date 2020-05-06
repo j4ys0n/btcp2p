@@ -1,5 +1,8 @@
 /// <reference types="node" />
 export declare class Utils {
+    logLevel: number;
+    constructor(logLevel?: number);
+    log(component: string, level: string, message: any): void;
     sha256(buffer: Buffer): Buffer;
     sha256d(buffer: Buffer): Buffer;
     varIntBuffer(n: number): Buffer;
@@ -13,4 +16,5 @@ export declare class Utils {
     getCompactSize(mp: any): number;
     stopHash(len: number): string;
     reverseHexBytes(bytes: string): string;
+    promiseLoop(promise: Function, scope: any, promiseArgsArray: Array<any>, promiseArgs?: Array<any>, indexesAsArgs?: boolean): Promise<any>;
 }

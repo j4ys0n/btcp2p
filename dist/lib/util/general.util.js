@@ -1,9 +1,22 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var crypto = require("crypto");
+var LOG_LEVELS = {
+    'debug': 0,
+    'info': 1,
+    'warn': 2,
+    'error': 3
+};
 var Utils = /** @class */ (function () {
-    function Utils() {
+    function Utils(logLevel) {
+        if (logLevel === void 0) { logLevel = 2; }
+        this.logLevel = logLevel;
     }
+    Utils.prototype.log = function (component, level, message) {
+        if (LOG_LEVELS[level] >= this.logLevel) {
+            console.log('[' + component + '] [' + level + ']\t' + message);
+        }
+    };
     Utils.prototype.sha256 = function (buffer) {
         var hash1 = crypto.createHash('sha256');
         hash1.update(buffer);
@@ -93,6 +106,26 @@ var Utils = /** @class */ (function () {
             reversed = bytes.substr(i * 2, 2) + reversed;
         }
         return reversed;
+    };
+    Utils.prototype.promiseLoop = function (promise, scope, promiseArgsArray, promiseArgs, indexesAsArgs) {
+        if (promiseArgs === void 0) { promiseArgs = []; }
+        if (indexesAsArgs === void 0) { indexesAsArgs = false; }
+        var index = 0;
+        var loop = function () {
+            if (indexesAsArgs) {
+                promiseArgs = [index, promiseArgsArray.length];
+            }
+            var argsArray = [promiseArgsArray[index]].concat(promiseArgs);
+            return promise.apply(scope, argsArray)
+                .then(function () {
+                index++;
+                if (index < promiseArgsArray.length) {
+                    return loop();
+                }
+                return Promise.resolve();
+            });
+        };
+        return loop();
     };
     return Utils;
 }());

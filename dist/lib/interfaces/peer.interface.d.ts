@@ -1,14 +1,49 @@
 /// <reference types="node" />
+import * as net from 'net';
+import { Events } from '../events/events';
+import { Message } from '../message/message';
+export interface NetworkOptions {
+    magic: string;
+    protocolVersion: number;
+    protocol: string;
+    genesisTarget: string;
+    genesisHash: string;
+    pubKeyVersion: number;
+    scriptVersion: number;
+}
 export interface StartOptions {
     name: string;
-    peerMagic: string;
     relayTransactions: boolean;
     host: string;
     port: number;
     serverPort?: number;
     startServer?: boolean;
-    protocolVersion: number;
     persist: boolean;
+    retryPause?: number;
+    skipBlockDownload?: boolean;
+    fetchMempool?: boolean;
+    skipTransactions?: boolean;
+    network: NetworkOptions;
+    api?: boolean;
+    frontEndPath?: string;
+    dbPath?: string;
+    apiPort?: number;
+    logLevel?: number;
+}
+export interface Shared {
+    externalHeight: number;
+    internalHeight: number;
+    dbHeight: number;
+    synced: boolean;
+}
+export interface ProtocolScope {
+    events: Events;
+    on: Events['on'];
+    socket: net.Socket;
+    message: Message;
+    retryingConnection: boolean;
+    connected: boolean;
+    shared: Shared;
 }
 export interface PeerAddress {
     hostRaw: Buffer;
@@ -17,4 +52,15 @@ export interface PeerAddress {
     ipVersion: Number;
     services?: String;
     timestamp?: Number;
+}
+export interface Version {
+    version: number;
+    services: number;
+    time: any;
+    addr_recv: string;
+    addr_from: string;
+    nonce: string;
+    client: string;
+    height: number;
+    relay: boolean;
 }

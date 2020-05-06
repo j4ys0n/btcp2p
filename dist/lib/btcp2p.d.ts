@@ -1,33 +1,34 @@
-/// <reference types="node" />
-import * as net from 'net';
-import { Events } from './events/events';
 import { Utils } from './util/general.util';
-import { Message } from './message/message';
-import { StartOptions } from './interfaces/peer.interface';
+import { DbUtil } from './util/db.util';
+import { StartOptions, ProtocolScope } from './interfaces/peer.interface';
 export declare class BTCP2P {
     private options;
-    client: net.Socket;
-    private server;
-    serverSocket: net.Socket;
+    private clientSocket;
+    private serverInstance;
+    private serverSocket;
     private serverStarting;
     private serverStarted;
     private serverPort;
-    protected clientEvents: Events;
-    protected serverEvents: Events;
-    onClient: (event: string, handler: import("./events/events").Handler<any>) => void;
-    onServer: (event: string, handler: import("./events/events").Handler<any>) => void;
+    private api;
+    private supportedProtocols;
+    private message;
+    private clientEvents;
+    client: ProtocolScope;
+    private serverEvents;
+    server: ProtocolScope;
     protected util: Utils;
-    protected message: Message;
+    protected dbUtil: DbUtil;
     private pings;
     private pingInterval;
-    private clientConnected;
-    private serverConnected;
-    private clientEventHandlersAdded;
-    protected rejectedRetryPause: number;
-    protected errorRetryPause: number;
+    private serverScopeInit;
+    private clientScopeInit;
+    protected connectRetryPause: number;
     private headers;
     private waitingForHeaders;
     private validConnectionConfig;
+    private skipBlockDownload;
+    private saveMempool;
+    private defaultApiPort;
     /**
      * @param options: StartOptions = {
      *  name: string,
@@ -38,17 +39,21 @@ export declare class BTCP2P {
      *  serverPort: number,
      *  startServer: boolean,
      *  protocolVersion: number,
+     *  protocol: string,
      *  persist: boolean
      * }
      */
     constructor(options: StartOptions);
     startServer(): Promise<any>;
-    stopServer(): void;
+    private startBlockFetch;
+    private getInternalBlockHeight;
+    private initServerScope;
+    private initClientScope;
+    stopServer(): Promise<any>;
     private initConnection;
     restartClient(wait: number): Promise<boolean>;
     private initRestartClient;
     private connect;
-    private clientEventHandlers;
-    private serverEventHandlers;
+    private initEventHandlers;
     private startPings;
 }
