@@ -2,8 +2,11 @@
   "name": "btcp2p",
   "version": "1.2.0",
   "description": "light btc-based p2p client",
-  "main": "dist/lib/btcp2p.js",
-  "typings": "dist/lib/btcp2p.d.ts",
+  "main": "dist/btcp2p.js",
+  "types": "dist/btcp2p.d.ts",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsc",
     "lint": "tslint -c tslint.json",
