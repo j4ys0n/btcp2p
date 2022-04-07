@@ -1,5 +1,3 @@
-import { MessageParser } from 'crypto-binary';
-
 import { Utils } from '../util/general.util';
 import { DbUtil } from '../util/db.util';
 import { Transactions } from './transactions';
@@ -29,7 +27,12 @@ export class TransactionHandler {
 
   handleTransactionInv(payload: Buffer): void {
     const tx = this.transactionParser.parseTransactionInv(payload);
-    this.scope.events.fire('txinv', tx.hash);
+    console.log(tx.hash)
+    if (this.options.mempoolTxHashOnly) {
+      this.scope.events.fire('txinv', tx.hash);
+    } else {
+      this.scope.events.fire('txinv', tx);
+    }
     if (this.saveMempool) {
       const inv = Buffer.concat([this.util.varIntBuffer(1), payload]);
       this.scope.message.sendGetData(inv);
@@ -37,10 +40,10 @@ export class TransactionHandler {
   }
 
   handleTransaction(payload: Buffer): void {
-    const p = new MessageParser(payload);
+    // console.log(payload.toString('hex'));
     // TODO is this timestamp good?
     const time = Math.floor(Date.now() / 1000);
-    const tx = this.transactionParser.parseTransactions(p, 1, time);
+    const tx = this.transactionParser.parseTransactions(payload, 1, time);
     this.scope.events.fire('tx', tx);
     // TODO
     // save tx to mempool

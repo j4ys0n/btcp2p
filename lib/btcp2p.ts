@@ -81,6 +81,7 @@ export class BTCP2P {
   private validConnectionConfig = true;
 
   private skipBlockDownload = false;
+  private skipBlockProcessing = false;
   private saveMempool = false;
 
   private defaultApiPort = 8080;
@@ -128,6 +129,13 @@ export class BTCP2P {
       this.options.skipBlockDownload !== false
     ) {
       this.skipBlockDownload = true;
+    }
+
+    if (
+      this.options.skipBlockProcessing !== undefined &&
+      this.options.skipBlockProcessing !== false
+    ) {
+      this.skipBlockProcessing = true;
     }
 
     if (
@@ -253,7 +261,7 @@ export class BTCP2P {
     }
   }
 
-  public stopServer(): Promise<any> {
+  public stopServer(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.util.log('core', 'info', 'server stopping');
       this.serverInstance.on('close', () => {

@@ -1,4 +1,4 @@
-import { MessageParser } from 'crypto-binary';
+import { MessageParser } from '../util/Message'
 
 import { Utils } from '../util/general.util';
 import { AddressUtil } from '../util/address.util';
@@ -22,11 +22,19 @@ export class TransactionParser {
   }
 
   parseTransactionInv(payload: Buffer): TxInvEvent {
-    const mParser = new MessageParser(payload);
+    const mParser: MessageParser = new MessageParser(payload);
     const raw: Buffer = Buffer.allocUnsafe(36);
     payload.copy(raw);
-    const version = parseInt(mParser.raw(4).reverse().toString('hex'), 16);
-    const hash = mParser.raw(32).reverse().toString('hex');
+    const versionBytes = mParser.raw(4)
+    if (!versionBytes) {
+      throw new Error('parseTransactionInv versionBytes undefined')
+    }
+    const version = parseInt(versionBytes.reverse().toString('hex'), 16);
+    const hashBytes = mParser.raw(32)
+    if (!hashBytes) {
+      throw new Error('parseTransactionInv hashBytes undefined')
+    }
+    const hash = hashBytes.reverse().toString('hex');
     const txInv = {
       version,
       hash,
@@ -35,9 +43,10 @@ export class TransactionParser {
     return txInv
   }
 
-  parseTransactions(mParser: any, count: number = 0, blockTime: number): Array<BitcoinTransaction | ZcashTransaction> {
+  parseTransactions(payload: Buffer, count: number = 0, blockTime: number): Array<BitcoinTransaction | ZcashTransaction> {
+    const mParser = new MessageParser(payload);
     if (count === 0) {
-      count = mParser.readVarInt();
+      count = mParser.readVarInt() || 0;
     }
     switch (this.options.network.protocol) {
       case 'bitcoin':
@@ -48,25 +57,31 @@ export class TransactionParser {
     return [];
   }
 
-  parseBitcoinTransactions(mParser: any, count: number, blockTime: number): Array<BitcoinTransaction> {
+  parseBitcoinTransactions(mParser: MessageParser, count: number, blockTime: number): Array<BitcoinTransaction> {
     const txes: Array<any> = [];
     for (let i = 0; i < count; i ++) {
       const bytesStart = mParser.pointerPosition();
-      const version = mParser.raw(4).reverse().toString('hex');
-      const witnessFlag = (
-        mParser.readInt8() === 1 &&
+      const version = mParser.readUInt32LE();
+      // const versionBytesEnd = mParser.pointerPosition();
+      const witnessFlagBytes = mParser.raw(2) || Buffer.from([])
+      const witnessFlag = witnessFlagBytes.toString('hex');
+      const witness = (
+        witnessFlag === '0001' &&
         blockTime >= SEGWIT_ACTIVATION_EPOCH
       ) ? true : false;
-      if (!witnessFlag) {
-        mParser.incrPointer(-1);
+      if (!witness) {
+        mParser.incrPointer(-2);
       }
       const txIn = this.parseTransparentInputs(mParser);
       const txOut = this.parseTransparentOutputs(mParser);
-      const witnesses = this.parseWitnesses(mParser, witnessFlag);
+      const witnesses = this.parseWitnesses(mParser, witness);
       const lockTime = mParser.readUInt32LE();
 
       const bytesEnd = mParser.pointerPosition();
       const rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
+      if (!rawBytes) {
+        throw new Error('parseBitcoinTransactions rawBytes undefined')
+      }
       const txid = this.util.sha256d(rawBytes).reverse().toString('hex');
 
       const tx = {
@@ -82,12 +97,20 @@ export class TransactionParser {
     return txes;
   }
 
-  parseZcashTransactions(mParser: any, count: number): Array<ZcashTransaction> {
+  parseZcashTransactions(mParser: MessageParser, count: number): Array<ZcashTransaction> {
     const txes: Array<any> = [];
     for (let i = 0; i < count; i++) {
       const bytesStart = mParser.pointerPosition();
-      const header = mParser.raw(4).reverse().toString('hex');
-      const nVersionGroupId = mParser.raw(4).reverse().toString('hex');
+      const headerBytes = mParser.raw(4)
+      if (!headerBytes) {
+        throw new Error('parseZcashTransactions headerBytes undefined')
+      }
+      const header = headerBytes.reverse().toString('hex');
+      const nVersionGroupIdBytes = mParser.raw(4)
+      if (!nVersionGroupIdBytes) {
+        throw new Error('parseZcashTransactions nVersionGroupIdBytes undefined')
+      }
+      const nVersionGroupId = nVersionGroupIdBytes.reverse().toString('hex');
       const txIn = this.parseTransparentInputs(mParser);
       const txOut = this.parseTransparentOutputs(mParser);
       const lockTime = mParser.readUInt32LE();
@@ -96,16 +119,22 @@ export class TransactionParser {
       const shieldedInputs = this.parseShieldedInputs(mParser);
       const shieldedOutputs = this.parseShieldedOutputs(mParser);
       const nJoinSplits = mParser.readVarInt();
+      if (nJoinSplits == null) {
+        throw new Error('parseZcashTransactions nJoinSplits undefined')
+      }
       const joinSplits = this.parseJoinSplits(mParser, nJoinSplits);
       const joinSplitPubKey = (nJoinSplits > 0) ?
-        mParser.raw(32).reverse().toString('hex') : '';
+        (mParser.raw(32) || []).reverse().toString('hex') : '';
       const joinSplitSig = (nJoinSplits > 0) ?
-        mParser.raw(64).reverse().toString('hex') : '';
+        (mParser.raw(64) || []).reverse().toString('hex') : '';
       const bindingSig = (shieldedInputs.length + shieldedOutputs.length > 0) ?
-        mParser.raw(64).reverse().toString('hex') : '';
+        (mParser.raw(64) || []).reverse().toString('hex') : '';
 
       const bytesEnd = mParser.pointerPosition();
       const rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
+      if (!rawBytes) {
+        throw new Error('parseZcashTransactions rawBytes undefined')
+      }
       const txid = this.util.sha256d(rawBytes).reverse().toString('hex');
 
       const tx = {
@@ -130,45 +159,51 @@ export class TransactionParser {
     return txes;
   }
 
-  parseWitnesses(mParser: any, witnessFlag: boolean): Array<string> {
+  parseWitnesses(mParser: MessageParser, witnessFlag: boolean): Array<string> {
     const wits: Array<any> = [];
     if (witnessFlag) {
-      const witnessCount = mParser.readVarInt();
+      const witnessCount = mParser.readVarInt() || 0;
       for (let i = 0; i < witnessCount; i++) {
-        const scriptLength = mParser.readVarInt();
-        const witness = mParser.raw(scriptLength).reverse().toString('hex');
+        const scriptLength = mParser.readVarInt() || 0;
+        const witness = (mParser.raw(scriptLength) || []).reverse().toString('hex');
         wits.push(witness);
       }
     }
     return wits;
   }
 
-  parseTransparentInputs(mParser: any): Array<TxInput> {
-    const count = mParser.readVarInt();
-    // console.log('tx in count:', count);
+  parseTransparentInputs(mParser: MessageParser): Array<TxInput> {
+    const count = mParser.readVarInt() || 0;
     const inputs: Array<any> = [];
     for (let i = 0; i < count; i++) {
+      const txidBytes = mParser.raw(32) || Buffer.from([])
+      const txid = txidBytes.reverse().toString('hex')
+      const outpointIndex = mParser.readUInt32LE()
+      const sigScriptLength = mParser.readVarInt() || 0
+      const sigScriptBytes = mParser.raw(sigScriptLength) || Buffer.from([])
+      const signatureScript = sigScriptBytes.reverse().toString('hex')
+      const sequence = mParser.readUInt32LE()
       const input = {
-        txid: mParser.raw(32).reverse().toString('hex'),
-        outpointIndex: mParser.readUInt32LE(),
-        signatureScript: mParser.raw(mParser.readVarInt()).reverse().toString('hex'),
-        sequence: mParser.raw(4).reverse().toString('hex')
-        // or sequence: mParser.readUInt32LE()
+        txid,
+        outpointIndex,
+        signatureScript,
+        sequence
       };
       inputs.push(input);
     }
     return inputs;
   }
 
-  parseTransparentOutputs(mParser: any): Array<TxOutput> {
-    const count = mParser.readVarInt();
+  parseTransparentOutputs(mParser: MessageParser): Array<TxOutput> {
+    const count = mParser.readVarInt() || 0;
     // console.log('tx out count:', count);
     const outputs: Array<any> = [];
     for (let i = 0; i < count; i++) {
-      const valueSatoshis: number = mParser.readUInt64LE();
+      const valueSatoshis: number = mParser.readUInt64LE() || 0;
       const value: number = valueSatoshis / (10**8);
-      const pkScript: string = mParser.raw(mParser.readVarInt()).toString('hex');
-      const address: string = this.addressUtil.classifyAndEncodeAddress(pkScript);
+      const pkScriptBytes = mParser.raw(mParser.readVarInt() || 0)
+      const pkScript = (pkScriptBytes) ? pkScriptBytes.toString('hex') : '';
+      const address = this.addressUtil.classifyAndEncodeAddress(pkScript);
       const output = {
         value,
         valueSatoshis,
@@ -180,46 +215,59 @@ export class TransactionParser {
     return outputs;
   }
 
-  parseShieldedInputs(mParser: any): Array<ShieldedInputs> {
-    const count = mParser.readVarInt();
+  parseShieldedInputs(mParser: MessageParser): Array<ShieldedInputs> {
+    const count = mParser.readVarInt() || 0;
     // console.log('shielded in count:', count);
     const inputs: Array<any> = [];
     for (let i = 0; i < count; i++) {
+      const cvBytes = mParser.raw(32) || Buffer.from([])
+      const anchorBytes = mParser.raw(32) || Buffer.from([])
+      const nullifierBytes = mParser.raw(32) || Buffer.from([])
+      const rkBytes = mParser.raw(32) || Buffer.from([])
+      const zkProofBytes = mParser.raw(192) || Buffer.from([])
+      const spendAuthSigBytes = mParser.raw(64) || Buffer.from([])
       const input = {
-        cv: mParser.raw(32).reverse().toString('hex'),
-        anchor: mParser.raw(32).reverse().toString('hex'),
-        nullifier: mParser.raw(32).reverse().toString('hex'),
-        rk: mParser.raw(32).reverse().toString('hex'),
-        zkProof: mParser.raw(192).toString('hex'),
-        spendAuthSig: mParser.raw(64).reverse().toString('hex')
+        cv: cvBytes.reverse().toString('hex'),
+        anchor: anchorBytes.reverse().toString('hex'),
+        nullifier: nullifierBytes.reverse().toString('hex'),
+        rk: rkBytes.reverse().toString('hex'),
+        zkProof: zkProofBytes.toString('hex'),
+        spendAuthSig: spendAuthSigBytes.reverse().toString('hex')
       }
       inputs.push(input);
     }
     return inputs;
   }
 
-  parseShieldedOutputs(mParser: any): Array<ShieldedOutputs> {
-    const count = mParser.readVarInt();
+  parseShieldedOutputs(mParser: MessageParser): Array<ShieldedOutputs> {
+    const count = mParser.readVarInt() || 0;
     // console.log('shielded out count:', count);
     const outputs: Array<any> = [];
     for (let i = 0; i < count; i++) {
+      const cvBytes = mParser.raw(32) || Buffer.from([])
+      const cmuBytes = mParser.raw(32) || Buffer.from([])
+      const ephemeralKeyBytes = mParser.raw(32) || Buffer.from([])
+      const encCyphertextBytes = mParser.raw(580) || Buffer.from([])
+      const outCyphertextBytes = mParser.raw(80) || Buffer.from([])
+      const zkProofBytes = mParser.raw(192) || Buffer.from([])
       const output = {
-        cv: mParser.raw(32).reverse().toString('hex'),
-        cmu: mParser.raw(32).reverse().toString('hex'),
-        ephemeralKey: mParser.raw(32).reverse().toString('hex'),
-        encCyphertext: mParser.raw(580).toString('hex'),
-        outCyphertext: mParser.raw(80).toString('hex'),
-        zkProof: mParser.raw(192).toString('hex')
+        cv: cvBytes.reverse().toString('hex'),
+        cmu: cmuBytes.reverse().toString('hex'),
+        ephemeralKey: ephemeralKeyBytes.reverse().toString('hex'),
+        encCyphertext: encCyphertextBytes.toString('hex'),
+        outCyphertext: outCyphertextBytes.toString('hex'),
+        zkProof: zkProofBytes.toString('hex')
       }
       outputs.push(output);
     }
     return outputs;
   }
 
-  parseJoinSplits(mParser: any, count: number): string {
+  parseJoinSplits(mParser: MessageParser, count: number): string {
     // console.log('joinSplits count:', count);
     if (count > 0) {
-      return mParser.raw(count * 1698).reverse().toString('hex')
+      const joinSplitBytes = mParser.raw(count * 1698) || Buffer.from([])
+      return joinSplitBytes.reverse().toString('hex')
     }
     return '';
   }

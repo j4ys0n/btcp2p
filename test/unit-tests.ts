@@ -2,7 +2,7 @@ import chai = require('chai');
 const expect = chai.expect;
 const should = chai.should();
 
-import { MessageParser } from 'crypto-binary';
+import { MessageParser } from '../lib/util/Message'
 
 import { BTCP2P } from '../lib/btcp2p';
 import { MessageConsts } from '../lib/message/message.consts';
@@ -69,7 +69,6 @@ describe('Unit tests', () => {
   let btcp2p: BTCP2PTest;
   let firstPingDone = false;
   let messageConsts: MessageConsts;
-  let blockMP: any;
   const utils = new Utils();
   before((done) => {
     btcp2p = new BTCP2PTest(unitTestOptions);
@@ -90,8 +89,6 @@ describe('Unit tests', () => {
       clientConnected = true;
       serverStartedAndClientConnected();
     })
-
-    blockMP = new MessageParser(Buffer.from(bitcoinBlock.bytes, 'hex'));
   });
 
   describe('internal methods', () => {
@@ -220,17 +217,21 @@ describe('Unit tests', () => {
     });
 
     it('should decode a bitcoin block header', (done) => {
+      const mp = new MessageParser(Buffer.from(bitcoinBlock.bytes, 'hex'))
       const blkParser = new BlockParser(integrationTestOptionsBTC, utils);
-      const blockHeader = blkParser.parseHeader(blockMP);
-      expect(blockHeader.hash).to.be.equal(bitcoinBlock.hash);
-      expect(blockHeader.prevBlock).to.be.equal(bitcoinBlock.prevBlock);
-      expect(blockHeader.hashMerkleRoot).to.be.equal(bitcoinBlock.hashMerkleRoot);
+      const {header} = blkParser.parseHeader(mp);
+      expect(header.hash).to.be.equal(bitcoinBlock.hash);
+      expect(header.prevBlock).to.be.equal(bitcoinBlock.prevBlock);
+      expect(header.hashMerkleRoot).to.be.equal(bitcoinBlock.hashMerkleRoot);
       done();
     });
 
     it('should decode bitcoin transactions in a block', (done) => {
+      const mp = new MessageParser(Buffer.from(bitcoinBlock.bytes, 'hex'));
+      const blkParser = new BlockParser(integrationTestOptionsBTC, utils);
+      const {header, remainingBuffer} = blkParser.parseHeader(mp);
       const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
-      const transactions = txparser.parseTransactions(blockMP, 0, bitcoinBlock.time)
+      const transactions = txparser.parseTransactions(remainingBuffer, 0, bitcoinBlock.time)
       // console.log(transactions.length)
       expect(transactions.length).to.be.equal(bitcoinBlock.transactions.total);
       expect(transactions[0].txid).to.be.equal(bitcoinBlock.transactions[0].txid);

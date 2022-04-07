@@ -1,5 +1,5 @@
-import * as path from 'path';
-import * as Datastore from 'nestdb';
+import path from 'path';
+import Datastore from 'nestdb';
 
 import { Utils } from '../util/general.util';
 
@@ -344,12 +344,18 @@ export class DbUtil {
     });
     return new Promise((resolve, reject) => {
       blocks.then((ds: Datastore) => {
-        ds.find({}, {hash: 1, height: 1, prevBlock: 1, nextBlock: 1}).exec((err: any, blocks: Array<ReducedBlockHeader>) => {
-          if (err) {
-            return reject(err);
+        ds.find(
+          {},
+          {hash: 1, height: 1, prevBlock: 1, nextBlock: 1}
+        ).exec(
+          // @ts-ignore
+          (err: any, blocks: Array<ReducedBlockHeader>) => {
+            if (err) {
+              return reject(err);
+            }
+            return resolve(blocks)
           }
-          return resolve(blocks)
-        })
+        )
       })
     });
   }
