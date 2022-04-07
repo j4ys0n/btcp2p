@@ -1,6 +1,6 @@
 import * as net from 'net';
 import * as crypto from 'crypto';
-import { MessageBuilder } from 'crypto-binary';
+import { MessageBuilder } from '../util/Message'
 
 import { MessageConsts } from './message.consts';
 import { Utils } from '../util/general.util';
@@ -29,7 +29,7 @@ const readFlowingBytes = (stream: net.Socket, amount: number, preRead: Buffer, c
 
 // TODO create nonce for sending with ping
 const createNonce = () => {
-  return crypto.pseudoRandomBytes(8)
+  return crypto.randomBytes(8)
 }
 
 const IPV6_IPV4_PADDING = Buffer.from([0,0,0,0,0,0,0,0,0,0,255,255]);
@@ -120,7 +120,7 @@ export class Message {
   }
 
   sendPing(): void {
-    const payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
+    const payload = Buffer.concat([crypto.randomBytes(8)]);
     this.sendMessage(this.commands.ping, payload);
     this.scope.events.fire('sent_message', {command: 'ping'});
   }

@@ -25,7 +25,7 @@ var readFlowingBytes = function (stream, amount, preRead, callback) {
 };
 // TODO create nonce for sending with ping
 var createNonce = function () {
-    return crypto.pseudoRandomBytes(8);
+    return crypto.randomBytes(8);
 };
 var IPV6_IPV4_PADDING = Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255]);
 var Message = /** @class */ (function () {
@@ -102,7 +102,7 @@ var Message = /** @class */ (function () {
         this.scope.events.fire('sent_message', { command: 'verack' });
     };
     Message.prototype.sendPing = function () {
-        var payload = Buffer.concat([crypto.pseudoRandomBytes(8)]);
+        var payload = Buffer.concat([crypto.randomBytes(8)]);
         this.sendMessage(this.commands.ping, payload);
         this.scope.events.fire('sent_message', { command: 'ping' });
     };

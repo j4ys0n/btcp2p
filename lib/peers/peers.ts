@@ -1,4 +1,4 @@
-import { MessageParser } from 'crypto-binary';
+import { MessageParser } from '../util/Message'
 
 import { PeerAddress, ProtocolScope } from '../interfaces/peer.interface';
 import { AddressEvent } from '../interfaces/events.interface';
@@ -57,7 +57,7 @@ export class PeerHandler {
   private parseAddrMessage(payload: Buffer): PeerAddress[] {
     const s = new MessageParser(payload);
     let addrs: Array<PeerAddress> = [];
-    let addrNum = s.readVarInt();
+    let addrNum = s.readVarInt() || 0;
     for (let i = 0; i < addrNum; i++) {
       const addr: PeerAddress = this.getAddr(<Buffer>s.raw(30));
       addrs.push(addr);

@@ -1,4 +1,4 @@
-import { MessageParser } from 'crypto-binary';
+import { MessageParser } from '../util/Message'
 
 import { Utils } from '../util/general.util';
 import { DbUtil } from '../util/db.util';
@@ -50,16 +50,16 @@ export class BlockHandler {
   handleBlock(payload: Buffer) {
     const p = new MessageParser(payload);
     // parse block header
-    const blockHeader: BlockHeader | BlockHeaderZcash = this.blockParser.parseHeader(p);
+    const {header, remainingBuffer} = this.blockParser.parseHeader(p);
 
     // parse transactions
     let txes: Array<BitcoinTransaction | ZcashTransaction>;
     if (this.options.skipTransactions) {
       txes = [];
     } else {
-      txes = this.transactionParser.parseTransactions(p, 0, blockHeader.timestamp);
+      txes = this.transactionParser.parseTransactions(remainingBuffer, 0, header.timestamp);
     }
-    const block: Block | BlockZcash = {...blockHeader, ...{transactions: txes}};
+    const block: Block | BlockZcash = {...header, ...{transactions: txes}};
     this.scope.events.fire('block', block);
     if (!this.options.skipBlockDownload) {
       this.blocks.updateBlockList(block);

@@ -1,4 +1,4 @@
-import { MessageParser } from 'crypto-binary';
+import { MessageParser } from '../util/Message'
 
 // class imports
 import { Utils } from '../util/general.util';
@@ -54,14 +54,17 @@ export class MessageHandlers {
 
   handleReject(payload: Buffer): Promise<RejectedEvent> {
     const p = new MessageParser(payload);
-    const messageLen = p.readInt8();
-    const message = p.raw(messageLen).toString();
-    const ccode = p.readInt8();
+    const messageLen = p.readInt8() || 0;
+    const messageBytes = p.raw(messageLen) || Buffer.from([])
+    const message = messageBytes.toString();
+    const ccode = p.readInt8() || 0;
     const name = this.messageConsts.rejectCodes[ccode];
-    const reasonLen = p.readInt8();
-    const reason = p.raw(reasonLen).toString();
+    const reasonLen = p.readInt8() || 0;
+    const reasonBytes = p.raw(reasonLen) || Buffer.from([])
+    const reason = reasonBytes.toString();
     const extraLen = (p.buffer.length -1) - (p.pointer -1);
-    const extra = (extraLen > 0) ? p.raw(extraLen).toString() : '';
+    const extraBytes = p.raw(extraLen) || Buffer.from([])
+    const extra = (extraLen > 0) ? extraBytes.toString() : '';
 
     let rejected: RejectedEvent = {
       message,
@@ -77,15 +80,25 @@ export class MessageHandlers {
   handleVersion(payload: Buffer): Promise<Version> {
     const s = new MessageParser(payload);
     // https://en.bitcoin.it/wiki/Protocol_documentation#version
+    const version = s.readUInt32LE() || 0
+    const servicesBytes = s.raw(8) || Buffer.from([])
+    const services = parseInt(servicesBytes.slice(0,1).toString('hex'), 16)
+    const time = s.raw(8) || Buffer.from([])
+    const addr_recvBytes = s.raw(26) || Buffer.from([])
+    const addr_recv = addr_recvBytes.toString('hex')
+    const addr_fromBytes = s.raw(26) || Buffer.from([])
+    const addr_from = addr_fromBytes.toString('hex')
+    const nonceBytes = s.raw(8) || Buffer.from([])
+    const nonce = nonceBytes.toString('hex')
     let parsed: Version = {
-      version: s.readUInt32LE(),
-      services: parseInt(s.raw(8).slice(0,1).toString('hex'), 16),
-      time: s.raw(8),
-      addr_recv: s.raw(26).toString('hex'),
-      addr_from: s.raw(26).toString('hex'),
-      nonce: s.raw(8).toString('hex'),
-      client: s.readVarString(),
-      height: s.readUInt32LE(),
+      version,
+      services,
+      time,
+      addr_recv,
+      addr_from,
+      nonce,
+      client: s.readVarString() || '',
+      height: s.readUInt32LE() || 0,
       relay: Boolean(s.raw(1))
     };
     if (<boolean>parsed.time !== false && parsed.time.readUInt32LE(4) === 0) {
@@ -121,7 +134,9 @@ export class MessageHandlers {
           this.transactionHandler.handleTransactionInv(payload);
           break;
         case this.invCodes.block:
-          this.blockHandler.handleBlockInv(payload);
+          if (!this.options.skipBlockProcessing) {
+            this.blockHandler.handleBlockInv(payload);
+          }
           break;
         case this.invCodes.blockFiltered:
           let fBlock = payload.slice(4, 36).reverse().toString('hex');
@@ -137,14 +152,7 @@ export class MessageHandlers {
   }
 
   private parseNonce(payload: Buffer): Buffer {
-    let nonce: Buffer;
-    if (payload.length) {
-      nonce = new MessageParser(payload).raw(8)
-    } else {
-      /* istanbul ignore next */
-      nonce = Buffer.from([]);
-    }
-    return nonce;
+    return (payload.length) ? new MessageParser(payload).raw(8) || Buffer.from([]) : Buffer.from([])
   }
 
   handleNotFound(payload: Buffer): void {
@@ -158,7 +166,7 @@ export class MessageHandlers {
     let hash;
     const mp = new MessageParser(payload)
     try {
-      type = mp.readUInt32LE(0);
+      type = mp.readUInt32LE() || 0;
     } catch (e) {
 
     }
@@ -168,11 +176,13 @@ export class MessageHandlers {
     }
     switch (type) {
       case this.invCodes.tx:
-        hash = mp.raw(32).reverse().toString('hex')
+        const hashBytesTx = mp.raw(32) || Buffer.from([])
+        hash = hashBytesTx.reverse().toString('hex')
         object['hash'] = hash
         break;
       case this.invCodes.block:
-        hash = mp.raw(32).reverse().toString('hex')
+        const hashBytesBlock = mp.raw(32) || Buffer.from([])
+        hash = hashBytesBlock.reverse().toString('hex')
         object['hash'] = hash
         break;
     }

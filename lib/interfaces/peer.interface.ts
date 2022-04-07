@@ -22,6 +22,8 @@ export interface StartOptions {
   persist: boolean;
   retryPause?: number;
   skipBlockDownload?: boolean;
+  skipBlockProcessing?: boolean;
+  mempoolTxHashOnly?: boolean;
   fetchMempool?: boolean;
   skipTransactions?: boolean;
   network: NetworkOptions;

@@ -1,4 +1,4 @@
-import { MessageParser } from 'crypto-binary';
+import { MessageParser } from '../util/Message'
 
 import { Utils } from '../util/general.util';
 
@@ -17,12 +17,16 @@ export class BlockParser {
     const p = new MessageParser(payload);
     let invCount = payload.length / invLen;
     while (invCount--) {
-      const raw = new MessageParser(Buffer.from(p.raw(invLen)));
+      const invBytes = p.raw(invLen) || Buffer.from([])
+      const raw = new MessageParser(Buffer.from(invBytes));
+      const version = raw.readUInt32LE() || 0
+      const hashBytes = raw.raw(hashLen) || Buffer.from([])
+      const hash = hashBytes.reverse().toString('hex')
       const blockInv: BlockInv = {
         raw: raw.buffer,
         parsed: {
-          version: raw.readUInt32LE(),
-          hash: raw.raw(hashLen).reverse().toString('hex')
+          version,
+          hash
         }
       }
       blockInvs.push(blockInv)
@@ -45,18 +49,19 @@ export class BlockParser {
     return hashes;
   }
 
-  parseHeader(mParser: any): BlockHeader | BlockHeaderZcash {
-    if (this.options.network.protocol === 'zcash') {
-      return this.parseZcashHeader(mParser);
-    }
-    // bitcoin is default
-    return this.parseBitcoinHeader(mParser);
+  parseHeader(mp: MessageParser): {header: BlockHeader | BlockHeaderZcash, remainingBuffer: Buffer} {
+    const {header, mParser} = (this.options.network.protocol === 'zcash')
+      ? this.parseZcashHeader(mp) : this.parseBitcoinHeader(mp)
+    return {
+      header,
+      remainingBuffer: mParser.rawRemainder() || Buffer.from([])
+    };
   }
 
-  parseHeaders(count: number, mParser: any): Array<BlockHeader | BlockHeaderZcash> {
+  parseHeaders(count: number, mParser: MessageParser): Array<BlockHeader | BlockHeaderZcash> {
     const headers: Array<any> = [];
     for (let i = 0; i < count; i++) {
-      const header = this.parseHeader(mParser);
+      const {header} = this.parseHeader(mParser);
       headers.push(header);
     }
     return headers;
@@ -79,7 +84,7 @@ export class BlockParser {
     return difficulty;
   }
 
-  parseZcashHeader(mParser: any): BlockHeaderZcash {
+  parseZcashHeader(mParser: any): {header: BlockHeaderZcash, mParser: MessageParser} {
     const bytesStart = mParser.pointerPosition();
     const version = mParser.readUInt32LE();
     const prevBlock = mParser.raw(32).reverse().toString('hex');
@@ -106,10 +111,13 @@ export class BlockParser {
       solution,
       difficulty
     };
-    return header;
+    return {
+      header,
+      mParser
+    };
   }
 
-  parseBitcoinHeader(mParser: any): BlockHeader {
+  parseBitcoinHeader(mParser: any): {header: BlockHeader, mParser: MessageParser} {
     const bytesStart = mParser.pointerPosition();
     const version = mParser.readUInt32LE();
     const prevBlock = mParser.raw(32).reverse().toString('hex');
@@ -132,6 +140,9 @@ export class BlockParser {
       nonce,
       difficulty
     };
-    return header;
+    return {
+      header,
+      mParser
+    };
   }
 }
