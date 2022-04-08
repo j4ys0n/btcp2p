@@ -37,7 +37,7 @@ describe('Transaction Unit Tests', () => {
     const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
     const p = new MessageParser(Buffer.from(segwitTxn.hex, 'hex'));
     const txes = txparser.parseBitcoinTransactions(p, 1, segwitTxn.time)
-    expect(txes[0].txOut[0].pkScript).to.be.equal(segwitTxn.decoded.txOut[0].pkScript);
+    expect(txes[0].vout[0].scriptPubKey.hex).to.be.equal(segwitTxn.decoded.txOut[0].pkScript);
     done();
   })
 
@@ -45,7 +45,7 @@ describe('Transaction Unit Tests', () => {
     const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
     const p = new MessageParser(Buffer.from(segwitTxnTaproot.hex, 'hex'));
     const txes = txparser.parseBitcoinTransactions(p, 1, segwitTxnTaproot.time)
-    expect(txes[0].txOut[1].pkScript).to.be.equal(segwitTxnTaproot.decoded.txOut[1].pkScript);
+    expect(txes[0].vout[1].scriptPubKey.hex).to.be.equal(segwitTxnTaproot.decoded.txOut[1].pkScript);
     done();
   })
 
@@ -53,7 +53,7 @@ describe('Transaction Unit Tests', () => {
   //   const txparser = new TransactionParser(utils, integrationTestOptionsBTC)
   //   const p = new MessageParser(Buffer.from(txn2.hex, 'hex'));
   //   const txes = txparser.parseBitcoinTransactions(p, 1, segwitTxnTaproot.time)
-  //   expect(txes[0].txOut[1].pkScript).to.be.equal(segwitTxnTaproot.decoded.txOut[1].pkScript);
+  //   expect(txes[0].vout[1].scriptPubKey.hex).to.be.equal(segwitTxnTaproot.decoded.txOut[1].pkScript);
   //   done();
   // })
 })

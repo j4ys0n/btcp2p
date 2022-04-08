@@ -13,7 +13,7 @@ export declare class TransactionParser {
     parseTransactions(payload: Buffer, count: number | undefined, blockTime: number): Array<BitcoinTransaction | ZcashTransaction>;
     parseBitcoinTransactions(mParser: MessageParser, count: number, blockTime: number): Array<BitcoinTransaction>;
     parseZcashTransactions(mParser: MessageParser, count: number): Array<ZcashTransaction>;
-    parseWitnesses(mParser: MessageParser, witnessFlag: boolean): Array<string>;
+    parseWitnesses(mParser: MessageParser, witnessFlag: boolean, count: number): Array<Array<string>>;
     parseTransparentInputs(mParser: MessageParser): Array<TxInput>;
     parseTransparentOutputs(mParser: MessageParser): Array<TxOutput>;
     parseShieldedInputs(mParser: MessageParser): Array<ShieldedInputs>;
