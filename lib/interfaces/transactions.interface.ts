@@ -1,9 +1,8 @@
 export type BitcoinTransaction = {
   txid: string;
-  version: string;
-  txIn: Array<TxInput>;
-  txOut: Array<TxOutput>;
-  witnesses?: any;
+  version: number;
+  vin: Array<TxInput>;
+  vout: Array<TxOutput>;
   lockTime: number;
 }
 
@@ -19,15 +18,22 @@ export type ZcashTransaction = {
 } & BitcoinTransaction
 
 export type TxInput = {
-  outpointIndex: number;
   txid: string;
-  signatureScript: string;
-  sequence: string;
+  vout: number;
+  scriptSig: {
+    hex: string;
+  };
+  txinwitness?: string[];
+  sequence: number;
 }
 
 export type TxOutput = {
   value: number;
-  pkScript: string;
+  n: number;
+  scriptPubKey: {
+    hex: string;
+    address: string;
+  }
 }
 
 export type ShieldedInputs = {

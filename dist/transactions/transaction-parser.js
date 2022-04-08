@@ -1,4 +1,15 @@
 "use strict";
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 var Message_1 = require("../util/Message");
 var address_util_1 = require("../util/address.util");
@@ -46,9 +57,9 @@ var TransactionParser = /** @class */ (function () {
     };
     TransactionParser.prototype.parseBitcoinTransactions = function (mParser, count, blockTime) {
         var txes = [];
-        for (var i = 0; i < count; i++) {
+        var _loop_1 = function (i) {
             var bytesStart = mParser.pointerPosition();
-            var version = mParser.readUInt32LE();
+            var version = mParser.readUInt32LE() || 0;
             // const versionBytesEnd = mParser.pointerPosition();
             var witnessFlagBytes = mParser.raw(2) || Buffer.from([]);
             var witnessFlag = witnessFlagBytes.toString('hex');
@@ -57,25 +68,31 @@ var TransactionParser = /** @class */ (function () {
             if (!witness) {
                 mParser.incrPointer(-2);
             }
-            var txIn = this.parseTransparentInputs(mParser);
-            var txOut = this.parseTransparentOutputs(mParser);
-            var witnesses = this.parseWitnesses(mParser, witness);
-            var lockTime = mParser.readUInt32LE();
+            var inputs = this_1.parseTransparentInputs(mParser);
+            var vout = this_1.parseTransparentOutputs(mParser);
+            var witnesses = this_1.parseWitnesses(mParser, witness, inputs.length);
+            var lockTime = mParser.readUInt32LE() || 0;
+            var vin = (witness && inputs.length > 0 && witnesses.length > 0)
+                ? inputs.map(function (v, j) { return ((witnesses[j].length > 0) ? __assign({}, v, { txinwitness: witnesses[j] }) : v); }) : inputs;
             var bytesEnd = mParser.pointerPosition();
             var rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
             if (!rawBytes) {
                 throw new Error('parseBitcoinTransactions rawBytes undefined');
             }
-            var txid = this.util.sha256d(rawBytes).reverse().toString('hex');
+            var txid = this_1.util.sha256d(rawBytes).reverse().toString('hex');
             var tx = {
                 txid: txid,
                 version: version,
-                txIn: txIn,
-                txOut: txOut,
-                witnesses: witnesses,
+                vin: vin,
+                vout: vout,
                 lockTime: lockTime
             };
+            console.log(JSON.stringify(tx));
             txes.push(tx);
+        };
+        var this_1 = this;
+        for (var i = 0; i < count; i++) {
+            _loop_1(i);
         }
         return txes;
     };
@@ -137,14 +154,18 @@ var TransactionParser = /** @class */ (function () {
         }
         return txes;
     };
-    TransactionParser.prototype.parseWitnesses = function (mParser, witnessFlag) {
+    TransactionParser.prototype.parseWitnesses = function (mParser, witnessFlag, count) {
         var wits = [];
         if (witnessFlag) {
-            var witnessCount = mParser.readVarInt() || 0;
-            for (var i = 0; i < witnessCount; i++) {
-                var scriptLength = mParser.readVarInt() || 0;
-                var witness = (mParser.raw(scriptLength) || []).reverse().toString('hex');
-                wits.push(witness);
+            for (var i = 0; i < count; i++) {
+                var w = [];
+                var witnessCount = mParser.readVarInt() || 0;
+                for (var i_1 = 0; i_1 < witnessCount; i_1++) {
+                    var scriptLength = mParser.readVarInt() || 0;
+                    var witness = (mParser.raw(scriptLength) || []).toString('hex');
+                    w.push(witness);
+                }
+                wits.push(w);
             }
         }
         return wits;
@@ -155,15 +176,20 @@ var TransactionParser = /** @class */ (function () {
         for (var i = 0; i < count; i++) {
             var txidBytes = mParser.raw(32) || Buffer.from([]);
             var txid = txidBytes.reverse().toString('hex');
-            var outpointIndex = mParser.readUInt32LE();
+            var vout = mParser.readUInt32LE();
+            if (vout == null) {
+                throw new Error('parseTransparentInputs outpoint index undefined');
+            }
             var sigScriptLength = mParser.readVarInt() || 0;
             var sigScriptBytes = mParser.raw(sigScriptLength) || Buffer.from([]);
-            var signatureScript = sigScriptBytes.reverse().toString('hex');
-            var sequence = mParser.readUInt32LE();
+            var hex = sigScriptBytes.reverse().toString('hex');
+            var sequence = mParser.readUInt32LE() || 0;
             var input = {
                 txid: txid,
-                outpointIndex: outpointIndex,
-                signatureScript: signatureScript,
+                vout: vout,
+                scriptSig: {
+                    hex: hex
+                },
                 sequence: sequence
             };
             inputs.push(input);
@@ -178,13 +204,15 @@ var TransactionParser = /** @class */ (function () {
             var valueSatoshis = mParser.readUInt64LE() || 0;
             var value = valueSatoshis / (Math.pow(10, 8));
             var pkScriptBytes = mParser.raw(mParser.readVarInt() || 0);
-            var pkScript = (pkScriptBytes) ? pkScriptBytes.toString('hex') : '';
-            var address = this.addressUtil.classifyAndEncodeAddress(pkScript);
+            var hex = (pkScriptBytes) ? pkScriptBytes.toString('hex') : '';
+            var address = this.addressUtil.classifyAndEncodeAddress(hex);
             var output = {
                 value: value,
-                valueSatoshis: valueSatoshis,
-                pkScript: pkScript,
-                address: address
+                n: i,
+                scriptPubKey: {
+                    hex: hex,
+                    address: address
+                }
             };
             outputs.push(output);
         }

@@ -198,7 +198,7 @@ describe('Unit tests', () => {
       const p = new MessageParser(Buffer.from('0100000001baa5ec1b07ab16b8c1b55b27d703e012f59693ff1ffddc91a6e4502bb38ad85b0100000000ffffffff01c0a1fc53020000001976a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088aca8f80800', 'hex'));
       const txes = txparser.parseBitcoinTransactions(p, 1, 1503539856)
       // console.log(txes);
-      expect(txes[0].txOut[0].pkScript).to.be.equal('76a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088ac');
+      expect(txes[0].vout[0].scriptPubKey.hex).to.be.equal('76a9148ed74a478d6655dbe3397b2cf4f2bee225af9c8088ac');
       done();
     })
 

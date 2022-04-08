@@ -58,10 +58,10 @@ export class TransactionParser {
   }
 
   parseBitcoinTransactions(mParser: MessageParser, count: number, blockTime: number): Array<BitcoinTransaction> {
-    const txes: Array<any> = [];
+    const txes: Array<BitcoinTransaction> = [];
     for (let i = 0; i < count; i ++) {
       const bytesStart = mParser.pointerPosition();
-      const version = mParser.readUInt32LE();
+      const version = mParser.readUInt32LE() || 0;
       // const versionBytesEnd = mParser.pointerPosition();
       const witnessFlagBytes = mParser.raw(2) || Buffer.from([])
       const witnessFlag = witnessFlagBytes.toString('hex');
@@ -72,11 +72,15 @@ export class TransactionParser {
       if (!witness) {
         mParser.incrPointer(-2);
       }
-      const txIn = this.parseTransparentInputs(mParser);
-      const txOut = this.parseTransparentOutputs(mParser);
-      const witnesses = this.parseWitnesses(mParser, witness);
-      const lockTime = mParser.readUInt32LE();
-
+      const inputs = this.parseTransparentInputs(mParser);
+      const vout = this.parseTransparentOutputs(mParser);
+      const witnesses = this.parseWitnesses(mParser, witness, inputs.length);
+      const lockTime = mParser.readUInt32LE() || 0;
+      const vin = (witness && inputs.length > 0 && witnesses.length > 0)
+        ? inputs.map((v, j) => ((witnesses[j].length > 0) ? {
+          ...v, txinwitness: witnesses[j]
+        }: v)) : inputs
+      
       const bytesEnd = mParser.pointerPosition();
       const rawBytes = mParser.rawSegment(bytesStart, bytesEnd);
       if (!rawBytes) {
@@ -87,11 +91,11 @@ export class TransactionParser {
       const tx = {
         txid,
         version,
-        txIn,
-        txOut,
-        witnesses,
+        vin,
+        vout,
         lockTime
       }
+      console.log(JSON.stringify(tx))
       txes.push(tx);
     }
     return txes;
@@ -159,14 +163,18 @@ export class TransactionParser {
     return txes;
   }
 
-  parseWitnesses(mParser: MessageParser, witnessFlag: boolean): Array<string> {
-    const wits: Array<any> = [];
+  parseWitnesses(mParser: MessageParser, witnessFlag: boolean, count: number): Array<Array<string>> {
+    const wits: Array<Array<string>> = [];
     if (witnessFlag) {
-      const witnessCount = mParser.readVarInt() || 0;
-      for (let i = 0; i < witnessCount; i++) {
-        const scriptLength = mParser.readVarInt() || 0;
-        const witness = (mParser.raw(scriptLength) || []).reverse().toString('hex');
-        wits.push(witness);
+      for (let i = 0; i < count; i++) {
+        const w: Array<string> = [];
+        const witnessCount = mParser.readVarInt() || 0;
+        for (let i = 0; i < witnessCount; i++) {
+          const scriptLength = mParser.readVarInt() || 0;
+          const witness = (mParser.raw(scriptLength) || []).toString('hex');
+          w.push(witness);
+        }
+        wits.push(w)
       }
     }
     return wits;
@@ -174,19 +182,24 @@ export class TransactionParser {
 
   parseTransparentInputs(mParser: MessageParser): Array<TxInput> {
     const count = mParser.readVarInt() || 0;
-    const inputs: Array<any> = [];
+    const inputs: Array<TxInput> = [];
     for (let i = 0; i < count; i++) {
       const txidBytes = mParser.raw(32) || Buffer.from([])
       const txid = txidBytes.reverse().toString('hex')
-      const outpointIndex = mParser.readUInt32LE()
+      const vout = mParser.readUInt32LE()
+      if (vout == null) {
+        throw new Error('parseTransparentInputs outpoint index undefined')
+      }
       const sigScriptLength = mParser.readVarInt() || 0
       const sigScriptBytes = mParser.raw(sigScriptLength) || Buffer.from([])
-      const signatureScript = sigScriptBytes.reverse().toString('hex')
-      const sequence = mParser.readUInt32LE()
+      const hex = sigScriptBytes.reverse().toString('hex')
+      const sequence = mParser.readUInt32LE() || 0
       const input = {
         txid,
-        outpointIndex,
-        signatureScript,
+        vout,
+        scriptSig: {
+          hex
+        },
         sequence
       };
       inputs.push(input);
@@ -197,18 +210,20 @@ export class TransactionParser {
   parseTransparentOutputs(mParser: MessageParser): Array<TxOutput> {
     const count = mParser.readVarInt() || 0;
     // console.log('tx out count:', count);
-    const outputs: Array<any> = [];
+    const outputs: Array<TxOutput> = [];
     for (let i = 0; i < count; i++) {
       const valueSatoshis: number = mParser.readUInt64LE() || 0;
       const value: number = valueSatoshis / (10**8);
       const pkScriptBytes = mParser.raw(mParser.readVarInt() || 0)
-      const pkScript = (pkScriptBytes) ? pkScriptBytes.toString('hex') : '';
-      const address = this.addressUtil.classifyAndEncodeAddress(pkScript);
+      const hex = (pkScriptBytes) ? pkScriptBytes.toString('hex') : '';
+      const address = this.addressUtil.classifyAndEncodeAddress(hex);
       const output = {
         value,
-        valueSatoshis,
-        pkScript,
-        address
+        n: i,
+        scriptPubKey: {
+          hex,
+          address
+        }
       }
       outputs.push(output);
     }

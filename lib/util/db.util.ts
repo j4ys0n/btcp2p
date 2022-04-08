@@ -325,6 +325,7 @@ export class DbUtil {
     });
     return new Promise((resolve, reject) => {
       blocks.then((ds: Datastore) => {
+        // @ts-ignore
         ds.find({}).sort({height: -1}).limit(1).exec((err: any, blocks: Array<Block | BlockZcash>) => {
           if (err) {
             return reject(err);

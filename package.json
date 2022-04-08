@@ -1,6 +1,6 @@
 {
-  "name": "btcp2p",
-  "version": "1.2.0",
+  "name": "btcp2p-client",
+  "version": "1.2.1",
   "description": "light btc-based p2p client",
   "main": "dist/btcp2p.js",
   "types": "dist/btcp2p.d.ts",
@@ -36,7 +36,6 @@
   },
   "homepage": "https://github.com/j4ys0n/btcp2p#readme",
   "dependencies": {
-    "@types/node": "^11.11.3",
     "bitcoinjs-lib": "^5.1.2",
     "express": "^4.17.1",
     "nestdb": "^2.0.0"
@@ -46,6 +45,7 @@
     "@types/express": "^4.17.1",
     "@types/mocha": "^5.2.6",
     "@types/nestdb": "^2.0.2",
+    "@types/node": "^11.11.3",
     "chai": "^4.2.0",
     "eslint-plugin-prettier": "^3.0.1",
     "mocha": "^6.1.3",

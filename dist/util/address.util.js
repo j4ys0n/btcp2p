@@ -20,7 +20,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var bitcoinjslib = __importStar(require("bitcoinjs-lib"));
 var bitcoinjslibClassify = __importStar(require("bitcoinjs-lib/src/classify"));
-var bitcoin = __assign(__assign({}, bitcoinjslib), { classify: bitcoinjslibClassify });
+var bitcoin = __assign({}, bitcoinjslib, { classify: bitcoinjslibClassify });
 var network = {
     messagePrefix: '\x18Bitcoin Signed Message:\n',
     bech32: 'bc',

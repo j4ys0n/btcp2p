@@ -50,7 +50,7 @@ var BlockHandler = /** @class */ (function () {
         else {
             txes = this.transactionParser.parseTransactions(remainingBuffer, 0, header.timestamp);
         }
-        var block = __assign(__assign({}, header), { transactions: txes });
+        var block = __assign({}, header, { transactions: txes });
         this.scope.events.fire('block', block);
         if (!this.options.skipBlockDownload) {
             this.blocks.updateBlockList(block);
