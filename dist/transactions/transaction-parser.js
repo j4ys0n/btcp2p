@@ -87,7 +87,7 @@ var TransactionParser = /** @class */ (function () {
                 vout: vout,
                 lockTime: lockTime
             };
-            console.log(JSON.stringify(tx));
+            // console.log(JSON.stringify(tx))
             txes.push(tx);
         };
         var this_1 = this;

@@ -95,7 +95,7 @@ export class TransactionParser {
         vout,
         lockTime
       }
-      console.log(JSON.stringify(tx))
+      // console.log(JSON.stringify(tx))
       txes.push(tx);
     }
     return txes;

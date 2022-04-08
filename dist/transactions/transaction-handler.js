@@ -18,7 +18,7 @@ var TransactionHandler = /** @class */ (function () {
     }
     TransactionHandler.prototype.handleTransactionInv = function (payload) {
         var tx = this.transactionParser.parseTransactionInv(payload);
-        console.log(tx.hash);
+        // console.log(tx.hash)
         if (this.options.mempoolTxHashOnly) {
             this.scope.events.fire('txinv', tx.hash);
         }

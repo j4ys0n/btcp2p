@@ -27,7 +27,7 @@ export class TransactionHandler {
 
   handleTransactionInv(payload: Buffer): void {
     const tx = this.transactionParser.parseTransactionInv(payload);
-    console.log(tx.hash)
+    // console.log(tx.hash)
     if (this.options.mempoolTxHashOnly) {
       this.scope.events.fire('txinv', tx.hash);
     } else {

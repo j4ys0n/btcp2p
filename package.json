@@ -1,6 +1,6 @@
 {
   "name": "btcp2p-client",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "light btc-based p2p client",
   "main": "dist/btcp2p.js",
   "types": "dist/btcp2p.d.ts",
